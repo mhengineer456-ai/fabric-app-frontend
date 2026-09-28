@@ -30,7 +30,8 @@ const NAV_SECTIONS = [
         icon: PackagePlus,
         children: [
           { path: '/fabric-sticker', icon: Printer, label: 'Material Add (Sticker)' },
-          { path: '/dyeing-material', icon: Droplets, label: 'Dyeing Material' },
+          { path: '/dyeing-material-manual', icon: Scale, label: 'Dyeing Inward (Manual Weight)' },
+          { path: '/dyeing-material', icon: Droplets, label: 'Dyeing Material (Auto Scale)' },
           { path: '/fabric-stock', icon: Ruler, label: 'Fabric Stock (Mtrs)' },
           { path: '/fabric-stock-kgs', icon: Scale, label: 'Fabric Stock (KGs)' },
           { path: '/material-against-po', icon: FileText, label: 'Material Against PO' },
@@ -100,13 +101,11 @@ export default function Layout({ children, darkMode, toggleDark, currentUser, ha
 
   const loadPendingData = async () => {
     try {
-      const [transfersData, matsData, approvalReqs] = await Promise.all([
+      const [transfersData, approvalReqs] = await Promise.all([
         store.getTransfers ? store.getTransfers() : Promise.resolve([]),
-        store.getMaterials ? store.getMaterials() : Promise.resolve([]),
         store.getApprovalRequests ? store.getApprovalRequests() : Promise.resolve([])
       ]);
       setPendingTransfers((transfersData || []).filter(t => t.status === 'Pending'));
-      setMaterials(matsData || []);
 
       const approvedTables = new Set(
         (approvalReqs || [])
@@ -127,7 +126,7 @@ export default function Layout({ children, darkMode, toggleDark, currentUser, ha
 
   useEffect(() => {
     loadPendingData();
-    const interval = setInterval(loadPendingData, 5000);
+    const interval = setInterval(loadPendingData, 30000);
     return () => clearInterval(interval);
   }, [location.pathname]);
 

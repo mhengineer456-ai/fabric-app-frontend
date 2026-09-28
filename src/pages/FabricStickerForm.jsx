@@ -137,7 +137,16 @@ const FabricStickerForm = () => {
       try {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 3000);
-        await fetch(`${BASE_URL}/health`, { signal: ctrl.signal });
+        let res;
+        try {
+          res = await fetch(`${BASE_URL}/health`, { signal: ctrl.signal });
+        } catch (fetchErr) {
+          if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+            res = await fetch('http://localhost:5001/api/health', { signal: ctrl.signal });
+          } else {
+            throw fetchErr;
+          }
+        }
         clearTimeout(tid);
         if (!isMounted.current) return;
 
@@ -1617,7 +1626,7 @@ const FabricStickerForm = () => {
             <div className="breadcrumb" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 700 }}>
               <span>Home</span><span>/</span><span>Stock Add</span><span>/</span><span style={{ color: 'var(--primary, #2563EB)' }}>Material Add (Sticker)</span>
             </div>
-            <h1 style={{ margin: '2px 0 0 0', fontSize: '22px', fontWeight: 900, letterSpacing: '-0.5px' }}>
+            <h1 className="gradient-title" style={{ margin: '2px 0 0 0', fontSize: '24px' }}>
               Material Add (Roll Sticker & Weighing)
             </h1>
           </div>

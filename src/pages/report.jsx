@@ -101,7 +101,12 @@ export default function DyeingShortageReport() {
       setLoading(true);
       setError(null);
 
-      const dbRes = await store.getShortageReports();
+      const dbRes = await Promise.race([
+        store.getShortageReports(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Request timed out. Please check your connection or click Retry.')), 15000)
+        )
+      ]);
       if (dbRes && dbRes.success && Array.isArray(dbRes.data)) {
         const mapped = dbRes.data.map(r => {
           let parsedEntries = r.selectedEntries;
@@ -1042,45 +1047,53 @@ export default function DyeingShortageReport() {
         .status-badge {
           display: inline-flex;
           align-items: center;
-          gap: 4px;
-          padding: 4px 10px;
-          border-radius: 20px;
+          gap: 5px;
+          padding: 4px 11px;
+          border-radius: 9999px;
           font-size: 11.5px;
           font-weight: 700;
-        /* Modal Overlay Styles */
+          letter-spacing: 0.02em;
+        }
+
+        /* ----------------------------------------------------
+           MODAL SYSTEM - ULTRA PREMIUM EXECUTIVE DESIGN
+        ---------------------------------------------------- */
         .modal-overlay {
           position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(15, 23, 42, 0.65);
-          backdrop-filter: blur(4px);
+          inset: 0;
+          background: rgba(15, 23, 42, 0.72);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
           display: flex;
           align-items: center;
           justify-content: center;
           z-index: 9999;
-          padding: 16px;
-          animation: fadeIn 0.2s ease;
+          padding: 20px 16px;
+          animation: modalFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         .modal-card {
           background: #FFFFFF;
-          border-radius: 16px;
+          border-radius: 20px;
           width: 100%;
-          max-width: 720px;
-          max-height: 92vh;
-          overflow-y: auto;
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-          border: 1px solid #CBD5E1;
+          max-width: 820px;
+          max-height: 90vh;
+          overflow: hidden;
+          box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.4), 0 0 0 1px rgba(226, 232, 240, 0.8), 0 12px 30px -4px rgba(0, 0, 0, 0.12);
+          border: 1px solid rgba(226, 232, 240, 0.9);
           display: flex;
           flex-direction: column;
-          animation: slideUp 0.25s ease;
+          animation: modalSlideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .dark .modal-card {
+          background: #0F172A;
+          border-color: #1E293B;
+          box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
         }
 
         .modal-header {
-          padding: 16px 20px;
-          background: linear-gradient(135deg, #1E3A8A 0%, #1E40AF 100%);
+          padding: 18px 24px;
+          background: linear-gradient(135deg, #0F172A 0%, #1E3A8A 55%, #2563EB 100%);
           color: #FFFFFF;
           display: flex;
           justify-content: space-between;
@@ -1088,76 +1101,190 @@ export default function DyeingShortageReport() {
           position: sticky;
           top: 0;
           z-index: 10;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+          box-shadow: 0 4px 14px rgba(15, 23, 42, 0.2);
+        }
+
+        .modal-header-icon-box {
+          width: 44px;
+          height: 44px;
+          border-radius: 12px;
+          background: rgba(255, 255, 255, 0.14);
+          backdrop-filter: blur(6px);
+          border: 1px solid rgba(255, 255, 255, 0.22);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+          color: #FDE047;
+        }
+
+        .modal-header-title {
+          margin: 0;
+          font-size: 17.5px;
+          font-weight: 800;
+          color: #FFFFFF;
+          letter-spacing: -0.01em;
+          line-height: 1.3;
+        }
+
+        .modal-header-meta {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 4px;
+          flex-wrap: wrap;
+        }
+
+        .modal-meta-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          font-size: 11.5px;
+          color: #E0E7FF;
+          background: rgba(255, 255, 255, 0.15);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          padding: 2px 10px;
+          border-radius: 9999px;
+          font-weight: 600;
         }
 
         .modal-close-btn {
-          background: rgba(255, 255, 255, 0.15);
-          border: none;
+          background: rgba(255, 255, 255, 0.14);
+          border: 1px solid rgba(255, 255, 255, 0.18);
           color: #FFFFFF;
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
-          transition: background 0.2s;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+          flex-shrink: 0;
         }
 
         .modal-close-btn:hover {
-          background: rgba(255, 255, 255, 0.3);
+          background: rgba(239, 68, 68, 0.85);
+          border-color: rgba(239, 68, 68, 0.9);
+          transform: scale(1.06);
+          box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
         }
 
         .modal-body {
-          padding: 20px;
+          padding: 22px 24px;
+          overflow-y: auto;
+          max-height: calc(90vh - 145px);
           display: flex;
           flex-direction: column;
           gap: 16px;
+          background: #FAFAFB;
+        }
+        .dark .modal-body {
+          background: #0B1120;
+        }
+
+        /* Custom Scrollbar for Modal Body */
+        .modal-body::-webkit-scrollbar {
+          width: 7px;
+        }
+        .modal-body::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .modal-body::-webkit-scrollbar-thumb {
+          background: #CBD5E1;
+          border-radius: 10px;
+        }
+        .dark .modal-body::-webkit-scrollbar-thumb {
+          background: #334155;
         }
 
         /* Inspection Lot Summary Strip inside Modal */
         .modal-lot-banner {
-          background: #F1F5F9;
-          border: 1px solid #CBD5E1;
-          border-radius: 10px;
-          padding: 10px 14px;
+          background: linear-gradient(135deg, #FFFFFF 0%, #F1F5F9 100%);
+          border: 1px solid #E2E8F0;
+          border-radius: 14px;
+          padding: 12px 18px;
           display: grid;
           grid-template-columns: repeat(4, 1fr);
-          gap: 8px;
-          font-size: 12px;
+          gap: 14px;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+        }
+        .dark .modal-lot-banner {
+          background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
+          border-color: #334155;
+          box-shadow: none;
         }
 
         .modal-lot-banner-item {
           display: flex;
           flex-direction: column;
+          gap: 3px;
         }
 
         .modal-lot-banner-item span:first-child {
           color: #64748B;
-          font-weight: 600;
-          font-size: 11px;
+          font-weight: 700;
+          font-size: 10.5px;
           text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+        .dark .modal-lot-banner-item span:first-child {
+          color: #94A3B8;
         }
 
         .modal-lot-banner-item span:last-child {
           color: #0F172A;
-          font-weight: 700;
+          font-weight: 800;
+          font-size: 13.5px;
+          line-height: 1.3;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .dark .modal-lot-banner-item span:last-child {
+          color: #F8FAFC;
         }
 
         /* Inspection Questions Form Cards */
+        .qc-questions-grid {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+
+        .qc-row-2col {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 14px;
+        }
+
         .qc-question-card {
           background: #FFFFFF;
           border: 1.5px solid #E2E8F0;
-          border-radius: 12px;
-          padding: 14px 16px;
+          border-radius: 14px;
+          padding: 16px 18px;
           display: flex;
           flex-direction: column;
-          gap: 10px;
-          transition: border-color 0.2s;
+          gap: 12px;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .dark .qc-question-card {
+          background: #1E293B;
+          border-color: #334155;
+          box-shadow: none;
         }
 
         .qc-question-card:hover {
-          border-color: #93C5FD;
+          border-color: #60A5FA;
+          box-shadow: 0 6px 18px -4px rgba(37, 99, 235, 0.12);
+          transform: translateY(-1px);
+        }
+        .dark .qc-question-card:hover {
+          border-color: #3B82F6;
+          box-shadow: 0 6px 18px -4px rgba(0, 0, 0, 0.4);
         }
 
         .qc-question-header {
@@ -1174,108 +1301,155 @@ export default function DyeingShortageReport() {
         }
 
         .qc-q-badge {
-          width: 24px;
-          height: 24px;
-          border-radius: 6px;
-          background: #2563EB;
+          width: 28px;
+          height: 28px;
+          border-radius: 8px;
+          background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
           color: #FFFFFF;
           font-weight: 800;
-          font-size: 12px;
+          font-size: 13px;
           display: flex;
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
+          box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
         }
 
         .qc-q-title {
           font-weight: 800;
           font-size: 13.5px;
           color: #0F172A;
+          line-height: 1.3;
+        }
+        .dark .qc-q-title {
+          color: #F8FAFC;
         }
 
         .qc-q-subtitle {
-          font-size: 11.5px;
+          font-size: 12px;
           color: #64748B;
-          margin: 0 0 0 34px;
+          margin: 0;
+          line-height: 1.4;
+          font-weight: 500;
+        }
+        .dark .qc-q-subtitle {
+          color: #94A3B8;
         }
 
         /* Toggle Button Groups for Inspection */
         .toggle-btn-group {
           display: flex;
-          gap: 8px;
-          margin-left: 34px;
+          gap: 10px;
+          width: 100%;
         }
 
         .toggle-btn {
           flex: 1;
-          padding: 8px 12px;
-          border-radius: 8px;
-          border: 1.5px solid #E2E8F0;
+          padding: 10px 14px;
+          border-radius: 10px;
+          border: 1.5px solid #CBD5E1;
           background: #F8FAFC;
           color: #475569;
-          font-size: 12.5px;
+          font-size: 13px;
           font-weight: 700;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 6px;
-          transition: all 0.15s ease;
+          gap: 8px;
+          transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .dark .toggle-btn {
+          background: #0F172A;
+          border-color: #334155;
+          color: #CBD5E1;
         }
 
         .toggle-btn:hover {
           background: #F1F5F9;
+          border-color: #94A3B8;
+          color: #0F172A;
+          transform: translateY(-1px);
+        }
+        .dark .toggle-btn:hover {
+          background: #1E293B;
+          color: #FFFFFF;
         }
 
         .toggle-btn.active-green {
-          background: #ECFDF5;
+          background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
           border-color: #10B981;
           color: #065F46;
-          box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15);
+          font-weight: 800;
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.22), 0 0 0 1px #10B981;
+        }
+        .dark .toggle-btn.active-green {
+          background: rgba(16, 185, 129, 0.18);
+          border-color: #10B981;
+          color: #34D399;
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
         }
 
         .toggle-btn.active-red {
-          background: #FEF2F2;
+          background: linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%);
           border-color: #EF4444;
           color: #991B1B;
-          box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
+          font-weight: 800;
+          box-shadow: 0 4px 12px rgba(239, 68, 68, 0.22), 0 0 0 1px #EF4444;
         }
-
-        .toggle-btn.active-amber {
-          background: #FFFBEB;
-          border-color: #F59E0B;
-          color: #92400E;
-          box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
+        .dark .toggle-btn.active-red {
+          background: rgba(239, 68, 68, 0.18);
+          border-color: #EF4444;
+          color: #F87171;
+          box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
         }
 
         .qc-input-field {
-          height: 36px;
-          padding: 6px 12px;
+          width: 100%;
+          height: 42px;
+          padding: 8px 14px;
           border: 1.5px solid #CBD5E1;
-          border-radius: 8px;
-          font-size: 13px;
+          border-radius: 10px;
+          font-size: 13.5px;
           font-weight: 600;
           color: #0F172A;
-          outline: none;
-          margin-left: 34px;
           background: #FFFFFF;
-          transition: border-color 0.2s;
+          outline: none;
+          transition: all 0.2s ease;
+          box-sizing: border-box;
+        }
+        .dark .qc-input-field {
+          background: #0F172A;
+          border-color: #334155;
+          color: #F8FAFC;
         }
 
         .qc-input-field:focus {
           border-color: #2563EB;
-          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+          box-shadow: 0 0 0 3.5px rgba(37, 99, 235, 0.15);
+          background: #FFFFFF;
+        }
+        .dark .qc-input-field:focus {
+          border-color: #3B82F6;
+          box-shadow: 0 0 0 3.5px rgba(59, 130, 246, 0.2);
+          background: #0F172A;
         }
 
         /* Final Decision Card & Verdict Buttons */
         .verdict-box {
-          background: #F8FAFC;
+          background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%);
           border: 2px solid #CBD5E1;
-          border-radius: 12px;
-          padding: 16px;
+          border-radius: 16px;
+          padding: 18px 20px;
           display: flex;
           flex-direction: column;
-          gap: 12px;
+          gap: 14px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+        .dark .verdict-box {
+          background: linear-gradient(135deg, #1E293B 0%, #111827 100%);
+          border-color: #374151;
+          box-shadow: none;
         }
 
         .verdict-header {
@@ -1286,14 +1460,21 @@ export default function DyeingShortageReport() {
 
         .verdict-title {
           font-weight: 800;
-          font-size: 14px;
+          font-size: 14.5px;
           color: #0F172A;
+          letter-spacing: -0.01em;
+        }
+        .dark .verdict-title {
+          color: #F8FAFC;
         }
 
         .verdict-sub {
           font-size: 12px;
           color: #64748B;
-          font-weight: 500;
+          font-weight: 600;
+        }
+        .dark .verdict-sub {
+          color: #94A3B8;
         }
 
         .verdict-btn-group {
@@ -1303,43 +1484,61 @@ export default function DyeingShortageReport() {
 
         .verdict-btn {
           flex: 1;
-          padding: 12px 16px;
-          border-radius: 10px;
+          padding: 14px 18px;
+          border-radius: 12px;
           border: 2px solid #CBD5E1;
-          font-size: 13px;
+          font-size: 13.5px;
           font-weight: 800;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 8px;
+          gap: 9px;
           cursor: pointer;
-          transition: all 0.2s ease;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
           background: #FFFFFF;
           color: #475569;
         }
+        .dark .verdict-btn {
+          background: #0F172A;
+          border-color: #334155;
+          color: #94A3B8;
+        }
 
         .verdict-btn:hover {
-          transform: translateY(-1px);
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         }
 
         .verdict-btn.pass {
-          background: #ECFDF5;
+          background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+          border-color: #059669;
+          color: #FFFFFF;
+          box-shadow: 0 6px 18px rgba(16, 185, 129, 0.35);
+        }
+        .dark .verdict-btn.pass {
+          background: linear-gradient(135deg, #10B981 0%, #059669 100%);
           border-color: #10B981;
-          color: #065F46;
-          box-shadow: 0 4px 10px rgba(16, 185, 129, 0.15);
+          color: #FFFFFF;
+          box-shadow: 0 6px 18px rgba(16, 185, 129, 0.4);
         }
 
         .verdict-btn.fail {
-          background: #FEF2F2;
+          background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+          border-color: #DC2626;
+          color: #FFFFFF;
+          box-shadow: 0 6px 18px rgba(239, 68, 68, 0.35);
+        }
+        .dark .verdict-btn.fail {
+          background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
           border-color: #EF4444;
-          color: #991B1B;
-          box-shadow: 0 4px 10px rgba(239, 68, 68, 0.15);
+          color: #FFFFFF;
+          box-shadow: 0 6px 18px rgba(239, 68, 68, 0.4);
         }
 
         .qc-inspector-grid {
           display: grid;
-          grid-template-columns: 1fr 1.5fr;
-          gap: 12px;
+          grid-template-columns: 1fr 1.6fr;
+          gap: 14px;
           margin-top: 4px;
         }
 
@@ -1354,62 +1553,156 @@ export default function DyeingShortageReport() {
           font-weight: 700;
           color: #334155;
         }
+        .dark .qc-input-label {
+          color: #CBD5E1;
+        }
 
         .qc-text-input {
-          height: 38px;
-          padding: 6px 12px;
+          height: 40px;
+          padding: 8px 14px;
           border: 1.5px solid #CBD5E1;
-          border-radius: 8px;
+          border-radius: 10px;
           font-size: 13px;
           font-weight: 600;
           color: #0F172A;
           background: #FFFFFF;
           outline: none;
-          transition: border-color 0.2s;
+          transition: all 0.2s ease;
+          box-sizing: border-box;
+        }
+        .dark .qc-text-input {
+          background: #0F172A;
+          border-color: #334155;
+          color: #F8FAFC;
         }
 
         .qc-text-input:focus {
           border-color: #2563EB;
           box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
         }
+        .dark .qc-text-input:focus {
+          border-color: #3B82F6;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        /* Sticky Footer */
+        .modal-footer-sticky {
+          padding: 16px 24px;
+          background: #FFFFFF;
+          border-top: 1px solid #E2E8F0;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          position: sticky;
+          bottom: 0;
+          z-index: 10;
+          box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.03);
+        }
+        .dark .modal-footer-sticky {
+          background: #0F172A;
+          border-color: #1E293B;
+          box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-modal-cancel {
+          padding: 10px 20px;
+          border-radius: 10px;
+          font-size: 13px;
+          font-weight: 700;
+          background: #F1F5F9;
+          color: #475569;
+          border: 1.5px solid #CBD5E1;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+        .dark .btn-modal-cancel {
+          background: #1E293B;
+          border-color: #334155;
+          color: #CBD5E1;
+        }
+        .btn-modal-cancel:hover {
+          background: #E2E8F0;
+          color: #0F172A;
+        }
+        .dark .btn-modal-cancel:hover {
+          background: #334155;
+          color: #FFFFFF;
+        }
+
+        .btn-modal-submit {
+          padding: 11px 24px;
+          border-radius: 10px;
+          font-size: 13.5px;
+          font-weight: 800;
+          background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+          color: #FFFFFF;
+          border: none;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .btn-modal-submit:hover:not(:disabled) {
+          box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5);
+          transform: translateY(-1px);
+        }
+        .btn-modal-submit:active:not(:disabled) {
+          transform: translateY(0);
+        }
+        .btn-modal-submit:disabled {
+          opacity: 0.65;
+          cursor: not-allowed;
+        }
 
         /* Inspection Tips Guidelines Modal Styles */
         .tip-item-card {
-          background: #F8FAFC;
+          background: #FFFFFF;
           border: 1.5px solid #E2E8F0;
-          border-radius: 12px;
-          padding: 12px 16px;
+          border-radius: 14px;
+          padding: 14px 18px;
           display: flex;
           align-items: flex-start;
           gap: 14px;
           transition: all 0.2s ease;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+        }
+        .dark .tip-item-card {
+          background: #1E293B;
+          border-color: #334155;
         }
 
         .tip-item-card:hover {
           border-color: #3B82F6;
           background: #EFF6FF;
-          transform: translateX(2px);
+          transform: translateX(3px);
+        }
+        .dark .tip-item-card:hover {
+          background: rgba(30, 58, 138, 0.2);
+          border-color: #3B82F6;
         }
 
         .tip-number-badge {
-          width: 28px;
-          height: 28px;
-          border-radius: 8px;
-          background: #1E40AF;
+          width: 32px;
+          height: 32px;
+          border-radius: 10px;
+          background: linear-gradient(135deg, #1E40AF 0%, #2563EB 100%);
           color: #FFFFFF;
           font-weight: 800;
-          font-size: 13px;
+          font-size: 13.5px;
           display: flex;
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
+          box-shadow: 0 3px 8px rgba(30, 64, 175, 0.25);
         }
 
         .tip-info-wrap {
           flex: 1;
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 5px;
         }
 
         .tip-header-line {
@@ -1425,50 +1718,66 @@ export default function DyeingShortageReport() {
           color: #0F172A;
           letter-spacing: 0.2px;
         }
+        .dark .tip-title-hindi {
+          color: #F8FAFC;
+        }
 
         .tip-category-pill {
           font-size: 11px;
           font-weight: 700;
-          background: #E0E7FF;
-          color: #3730A3;
-          padding: 2px 8px;
-          border-radius: 12px;
+          background: #EEF2FF;
+          color: #4338CA;
+          padding: 2px 10px;
+          border-radius: 9999px;
+          border: 1px solid #C7D2FE;
+        }
+        .dark .tip-category-pill {
+          background: rgba(99, 102, 241, 0.15);
+          color: #A5B4FC;
+          border-color: rgba(99, 102, 241, 0.3);
         }
 
         .tip-desc-english {
           margin: 0;
-          font-size: 12px;
+          font-size: 12.5px;
           color: #475569;
-          line-height: 1.4;
+          line-height: 1.45;
+        }
+        .dark .tip-desc-english {
+          color: #94A3B8;
         }
 
         .modal-footer-brand {
           display: flex;
           align-items: center;
-          gap: 6px;
-          font-size: 12px;
+          gap: 8px;
+          font-size: 12.5px;
           color: #64748B;
           font-weight: 600;
         }
-
-        .modal-footer-sticky {
-          padding: 14px 20px;
-          background: #F8FAFC;
-          border-top: 1px solid #E2E8F0;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          position: sticky;
-          bottom: 0;
-          z-index: 10;
+        .dark .modal-footer-brand {
+          color: #94A3B8;
         }
 
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes modalFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes modalSlideUp {
+          from { transform: translateY(24px) scale(0.97); opacity: 0; }
+          to { transform: translateY(0) scale(1); opacity: 1; }
+        }
 
         @media (max-width: 1024px) {
           .kpi-grid { grid-template-columns: repeat(2, 1fr); }
           .modal-lot-banner { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 768px) {
+          .qc-row-2col { grid-template-columns: 1fr; }
+          .qc-inspector-grid { grid-template-columns: 1fr; }
+          .verdict-btn-group { flex-direction: column; }
+          .modal-lot-banner { grid-template-columns: 1fr 1fr; }
         }
       `}</style>
 
@@ -1878,14 +2187,23 @@ export default function DyeingShortageReport() {
         <div className="modal-overlay" onClick={() => setShowTipsModal(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <div className="flex items-center gap-2.5">
-                <Lightbulb size={22} className="text-amber-300" />
+              <div className="flex items-center gap-3">
+                <div className="modal-header-icon-box">
+                  <Lightbulb size={22} />
+                </div>
                 <div>
-                  <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>Fabric Inspection Tips (कपड़ा जांच दिशानिर्देश)</h2>
-                  <span className="text-xs text-blue-200">Standard Quality Control & Inspection Checklist</span>
+                  <h2 className="modal-header-title">Fabric Inspection Tips (कपड़ा जांच दिशानिर्देश)</h2>
+                  <div className="modal-header-meta">
+                    <span className="modal-meta-pill">Standard Quality Control & Inspection Checklist</span>
+                  </div>
                 </div>
               </div>
-              <button className="modal-close-btn" onClick={() => setShowTipsModal(false)}>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setShowTipsModal(false)}
+                title="Close Guidelines"
+              >
                 <X size={18} />
               </button>
             </div>
@@ -1911,12 +2229,12 @@ export default function DyeingShortageReport() {
 
             <div className="modal-footer-sticky">
               <div className="modal-footer-brand">
-                <ShieldCheck size={16} color="#059669" />
+                <ShieldCheck size={18} color="#059669" />
                 <span>Mohit Hosiery Quality Assurance Standards</span>
               </div>
               <button
                 type="button"
-                className="btn btn-primary"
+                className="btn-modal-submit"
                 onClick={() => setShowTipsModal(false)}
               >
                 Close Guidelines
@@ -1932,20 +2250,29 @@ export default function DyeingShortageReport() {
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="modal-header">
-              <div className="flex items-center gap-2.5">
-                <ClipboardCheck size={24} className="text-amber-300" />
+              <div className="flex items-center gap-3">
+                <div className="modal-header-icon-box">
+                  <ClipboardCheck size={24} />
+                </div>
                 <div>
-                  <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>
+                  <h2 className="modal-header-title">
                     Final Fabric Inspection Form (अंतिम कपड़ा जांच)
                   </h2>
-                  <span className="text-xs text-blue-200">
-                    Lot No: <b className="text-white font-mono">{selectedInspectionRecord.lotNumber}</b> | Bill: <b className="text-white">{selectedInspectionRecord.billNumber}</b>
-                  </span>
+                  <div className="modal-header-meta">
+                    <span className="modal-meta-pill">
+                      Lot No: <b className="text-white font-mono">{selectedInspectionRecord.lotNumber}</b>
+                    </span>
+                    <span className="modal-meta-pill">
+                      Bill: <b className="text-white">{selectedInspectionRecord.billNumber}</b>
+                    </span>
+                  </div>
                 </div>
               </div>
               <button
+                type="button"
                 className="modal-close-btn"
                 onClick={() => !savingInspection && setSelectedInspectionRecord(null)}
+                title="Close Form"
               >
                 <X size={18} />
               </button>
@@ -1974,168 +2301,173 @@ export default function DyeingShortageReport() {
                   </div>
                 </div>
 
-                {/* 1. FABRIC SAAF HAI YA NHI */}
-                <div className="qc-question-card">
-                  <div className="qc-question-header">
-                    <div className="qc-q-num-title">
-                      <span className="qc-q-badge">1</span>
-                      <span className="qc-q-title">FABRIC SAAF HAI YA NHI? (Fabric Cleanliness)</span>
+                <div className="qc-questions-grid">
+                  {/* 1. FABRIC SAAF HAI YA NHI */}
+                  <div className="qc-question-card">
+                    <div className="qc-question-header">
+                      <div className="qc-q-num-title">
+                        <span className="qc-q-badge">1</span>
+                        <span className="qc-q-title">FABRIC SAAF HAI YA NHI? (Fabric Cleanliness)</span>
+                      </div>
+                    </div>
+                    <p className="qc-q-subtitle">Ensure no dust, grease, stain spots or weaving dirt patches.</p>
+                    <div className="toggle-btn-group">
+                      <button
+                        type="button"
+                        className={`toggle-btn ${inspectionForm.fabricClean === 'YES' ? 'active-green' : ''}`}
+                        onClick={() => setInspectionForm({ ...inspectionForm, fabricClean: 'YES' })}
+                      >
+                        <Check size={15} /> Haan, Saaf Hai (Clean - YES)
+                      </button>
+                      <button
+                        type="button"
+                        className={`toggle-btn ${inspectionForm.fabricClean === 'NO' ? 'active-red' : ''}`}
+                        onClick={() => setInspectionForm({ ...inspectionForm, fabricClean: 'NO' })}
+                      >
+                        <X size={15} /> Nahi, Daag / Ganda Hai (Dirty - NO)
+                      </button>
                     </div>
                   </div>
-                  <p className="qc-q-subtitle">Ensure no dust, grease, stain spots or weaving dirt patches.</p>
-                  <div className="toggle-btn-group">
-                    <button
-                      type="button"
-                      className={`toggle-btn ${inspectionForm.fabricClean === 'YES' ? 'active-green' : ''}`}
-                      onClick={() => setInspectionForm({ ...inspectionForm, fabricClean: 'YES' })}
-                    >
-                      <Check size={14} /> Haan, Saaf Hai (Clean - YES)
-                    </button>
-                    <button
-                      type="button"
-                      className={`toggle-btn ${inspectionForm.fabricClean === 'NO' ? 'active-red' : ''}`}
-                      onClick={() => setInspectionForm({ ...inspectionForm, fabricClean: 'NO' })}
-                    >
-                      <X size={14} /> Nahi, Daag / Ganda Hai (Dirty - NO)
-                    </button>
-                  </div>
-                </div>
 
-                {/* 2. FABRIC KI HAND FEEL THIK HAI YA NHI */}
-                <div className="qc-question-card">
-                  <div className="qc-question-header">
-                    <div className="qc-q-num-title">
-                      <span className="qc-q-badge">2</span>
-                      <span className="qc-q-title">FABRIC KI HAND FEEL THIK HAI YA NHI? (Hand Feel)</span>
+                  {/* 2. FABRIC KI HAND FEEL THIK HAI YA NHI */}
+                  <div className="qc-question-card">
+                    <div className="qc-question-header">
+                      <div className="qc-q-num-title">
+                        <span className="qc-q-badge">2</span>
+                        <span className="qc-q-title">FABRIC KI HAND FEEL THIK HAI YA NHI? (Hand Feel)</span>
+                      </div>
+                    </div>
+                    <p className="qc-q-subtitle">Verify softness, finish, and touch quality standard.</p>
+                    <div className="toggle-btn-group">
+                      <button
+                        type="button"
+                        className={`toggle-btn ${inspectionForm.fabricHandFeel === 'OK' ? 'active-green' : ''}`}
+                        onClick={() => setInspectionForm({ ...inspectionForm, fabricHandFeel: 'OK' })}
+                      >
+                        <Check size={15} /> Theek Hai / Soft (OK)
+                      </button>
+                      <button
+                        type="button"
+                        className={`toggle-btn ${inspectionForm.fabricHandFeel === 'NOT_OK' ? 'active-red' : ''}`}
+                        onClick={() => setInspectionForm({ ...inspectionForm, fabricHandFeel: 'NOT_OK' })}
+                      >
+                        <X size={15} /> Rough / Kharab Hai (Not OK)
+                      </button>
                     </div>
                   </div>
-                  <p className="qc-q-subtitle">Verify softness, finish, and touch quality standard.</p>
-                  <div className="toggle-btn-group">
-                    <button
-                      type="button"
-                      className={`toggle-btn ${inspectionForm.fabricHandFeel === 'OK' ? 'active-green' : ''}`}
-                      onClick={() => setInspectionForm({ ...inspectionForm, fabricHandFeel: 'OK' })}
-                    >
-                      <Check size={14} /> Theek Hai / Soft (OK)
-                    </button>
-                    <button
-                      type="button"
-                      className={`toggle-btn ${inspectionForm.fabricHandFeel === 'NOT_OK' ? 'active-red' : ''}`}
-                      onClick={() => setInspectionForm({ ...inspectionForm, fabricHandFeel: 'NOT_OK' })}
-                    >
-                      <X size={14} /> Rough / Kharab Hai (Not OK)
-                    </button>
-                  </div>
-                </div>
 
-                {/* 3. READY DIA KITNA HAI */}
-                <div className="qc-question-card">
-                  <div className="qc-question-header">
-                    <div className="qc-q-num-title">
-                      <span className="qc-q-badge">3</span>
-                      <span className="qc-q-title">READY DIA KITNA HAI? (Finished Width / DIA)</span>
+                  {/* 3 & 4. READY DIA & READY GSM SIDE BY SIDE */}
+                  <div className="qc-row-2col">
+                    {/* 3. READY DIA KITNA HAI */}
+                    <div className="qc-question-card">
+                      <div className="qc-question-header">
+                        <div className="qc-q-num-title">
+                          <span className="qc-q-badge">3</span>
+                          <span className="qc-q-title">READY DIA KITNA HAI? (Width / DIA)</span>
+                        </div>
+                      </div>
+                      <p className="qc-q-subtitle">Measured finished fabric tube or open width.</p>
+                      <input
+                        type="text"
+                        required
+                        className="qc-input-field"
+                        placeholder="e.g. 60 inches / 152 cm"
+                        value={inspectionForm.readyDia}
+                        onChange={(e) => setInspectionForm({ ...inspectionForm, readyDia: e.target.value })}
+                      />
                     </div>
-                  </div>
-                  <p className="qc-q-subtitle">Enter measured finished fabric tube or open width.</p>
-                  <input
-                    type="text"
-                    required
-                    className="qc-input-field"
-                    placeholder="Enter DIA (e.g. 60 inches / 152 cm)"
-                    value={inspectionForm.readyDia}
-                    onChange={(e) => setInspectionForm({ ...inspectionForm, readyDia: e.target.value })}
-                  />
-                </div>
 
-                {/* 4. READY GSM KITNA HAI */}
-                <div className="qc-question-card">
-                  <div className="qc-question-header">
-                    <div className="qc-q-num-title">
-                      <span className="qc-q-badge">4</span>
-                      <span className="qc-q-title">READY GSM KITNA HAI? (Finished GSM)</span>
+                    {/* 4. READY GSM KITNA HAI */}
+                    <div className="qc-question-card">
+                      <div className="qc-question-header">
+                        <div className="qc-q-num-title">
+                          <span className="qc-q-badge">4</span>
+                          <span className="qc-q-title">READY GSM KITNA HAI? (GSM)</span>
+                        </div>
+                      </div>
+                      <p className="qc-q-subtitle">Measured GSM from sample disc cut.</p>
+                      <input
+                        type="text"
+                        required
+                        className="qc-input-field"
+                        placeholder="e.g. 280 GSM / 320 GSM"
+                        value={inspectionForm.readyGsm}
+                        onChange={(e) => setInspectionForm({ ...inspectionForm, readyGsm: e.target.value })}
+                      />
                     </div>
                   </div>
-                  <p className="qc-q-subtitle">Enter measured GSM from fabric sample disc cut.</p>
-                  <input
-                    type="text"
-                    required
-                    className="qc-input-field"
-                    placeholder="Enter GSM (e.g. 280 GSM / 320 GSM)"
-                    value={inspectionForm.readyGsm}
-                    onChange={(e) => setInspectionForm({ ...inspectionForm, readyGsm: e.target.value })}
-                  />
-                </div>
 
-                {/* 5. RIB KA DIA KITNA HAI */}
-                <div className="qc-question-card">
-                  <div className="qc-question-header">
-                    <div className="qc-q-num-title">
-                      <span className="qc-q-badge">5</span>
-                      <span className="qc-q-title">RIB KA DIA KITNA HAI? (RIB Diameter / Width)</span>
+                  {/* 5. RIB KA DIA KITNA HAI */}
+                  <div className="qc-question-card">
+                    <div className="qc-question-header">
+                      <div className="qc-q-num-title">
+                        <span className="qc-q-badge">5</span>
+                        <span className="qc-q-title">RIB KA DIA KITNA HAI? (RIB Diameter / Width)</span>
+                      </div>
                     </div>
+                    <p className="qc-q-subtitle">Enter RIB width or tubular diameter.</p>
+                    <input
+                      type="text"
+                      required
+                      className="qc-input-field"
+                      placeholder="e.g. 18 inches tubular / 20 inches"
+                      value={inspectionForm.ribDia}
+                      onChange={(e) => setInspectionForm({ ...inspectionForm, ribDia: e.target.value })}
+                    />
                   </div>
-                  <p className="qc-q-subtitle">Enter RIB width or tubular diameter.</p>
-                  <input
-                    type="text"
-                    required
-                    className="qc-input-field"
-                    placeholder="Enter RIB DIA (e.g. 18 inches tubular / 20 inches)"
-                    value={inspectionForm.ribDia}
-                    onChange={(e) => setInspectionForm({ ...inspectionForm, ribDia: e.target.value })}
-                  />
-                </div>
 
-                {/* 6. RIB SAAF HAI YA NHI */}
-                <div className="qc-question-card">
-                  <div className="qc-question-header">
-                    <div className="qc-q-num-title">
-                      <span className="qc-q-badge">6</span>
-                      <span className="qc-q-title">RIB SAAF HAI YA NHI? (RIB Cleanliness)</span>
+                  {/* 6. RIB SAAF HAI YA NHI */}
+                  <div className="qc-question-card">
+                    <div className="qc-question-header">
+                      <div className="qc-q-num-title">
+                        <span className="qc-q-badge">6</span>
+                        <span className="qc-q-title">RIB SAAF HAI YA NHI? (RIB Cleanliness)</span>
+                      </div>
+                    </div>
+                    <p className="qc-q-subtitle">Verify RIB roll is free of lint, oil, and grease patches.</p>
+                    <div className="toggle-btn-group">
+                      <button
+                        type="button"
+                        className={`toggle-btn ${inspectionForm.ribClean === 'YES' ? 'active-green' : ''}`}
+                        onClick={() => setInspectionForm({ ...inspectionForm, ribClean: 'YES' })}
+                      >
+                        <Check size={15} /> Haan, RIB Saaf Hai (YES)
+                      </button>
+                      <button
+                        type="button"
+                        className={`toggle-btn ${inspectionForm.ribClean === 'NO' ? 'active-red' : ''}`}
+                        onClick={() => setInspectionForm({ ...inspectionForm, ribClean: 'NO' })}
+                      >
+                        <X size={15} /> Nahi, Daag / Lint Hai (NO)
+                      </button>
                     </div>
                   </div>
-                  <p className="qc-q-subtitle">Verify RIB roll is free of lint, oil, and grease patches.</p>
-                  <div className="toggle-btn-group">
-                    <button
-                      type="button"
-                      className={`toggle-btn ${inspectionForm.ribClean === 'YES' ? 'active-green' : ''}`}
-                      onClick={() => setInspectionForm({ ...inspectionForm, ribClean: 'YES' })}
-                    >
-                      <Check size={14} /> Haan, RIB Saaf Hai (YES)
-                    </button>
-                    <button
-                      type="button"
-                      className={`toggle-btn ${inspectionForm.ribClean === 'NO' ? 'active-red' : ''}`}
-                      onClick={() => setInspectionForm({ ...inspectionForm, ribClean: 'NO' })}
-                    >
-                      <X size={14} /> Nahi, Daag / Lint Hai (NO)
-                    </button>
-                  </div>
-                </div>
 
-                {/* 7. KAPDA S RIB KI MATCHING OK HAI YA NHI */}
-                <div className="qc-question-card">
-                  <div className="qc-question-header">
-                    <div className="qc-q-num-title">
-                      <span className="qc-q-badge">7</span>
-                      <span className="qc-q-title">KAPDA S RIB KI MATCHING OK HAI YA NHI? (Shade Match)</span>
+                  {/* 7. KAPDA S RIB KI MATCHING OK HAI YA NHI */}
+                  <div className="qc-question-card">
+                    <div className="qc-question-header">
+                      <div className="qc-q-num-title">
+                        <span className="qc-q-badge">7</span>
+                        <span className="qc-q-title">KAPDA S RIB KI MATCHING OK HAI YA NHI? (Shade Match)</span>
+                      </div>
                     </div>
-                  </div>
-                  <p className="qc-q-subtitle">Compare color tone and shade matching between Main Fabric & RIB.</p>
-                  <div className="toggle-btn-group">
-                    <button
-                      type="button"
-                      className={`toggle-btn ${inspectionForm.ribMatching === 'OK' ? 'active-green' : ''}`}
-                      onClick={() => setInspectionForm({ ...inspectionForm, ribMatching: 'OK' })}
-                    >
-                      <Check size={14} /> 100% Matching OK Hai (Match)
-                    </button>
-                    <button
-                      type="button"
-                      className={`toggle-btn ${inspectionForm.ribMatching === 'MISMATCH' ? 'active-red' : ''}`}
-                      onClick={() => setInspectionForm({ ...inspectionForm, ribMatching: 'MISMATCH' })}
-                    >
-                      <X size={14} /> Color / Shade Variation Hai (Mismatch)
-                    </button>
+                    <p className="qc-q-subtitle">Compare color tone and shade matching between Main Fabric & RIB.</p>
+                    <div className="toggle-btn-group">
+                      <button
+                        type="button"
+                        className={`toggle-btn ${inspectionForm.ribMatching === 'OK' ? 'active-green' : ''}`}
+                        onClick={() => setInspectionForm({ ...inspectionForm, ribMatching: 'OK' })}
+                      >
+                        <Check size={15} /> 100% Matching OK Hai (Match)
+                      </button>
+                      <button
+                        type="button"
+                        className={`toggle-btn ${inspectionForm.ribMatching === 'MISMATCH' ? 'active-red' : ''}`}
+                        onClick={() => setInspectionForm({ ...inspectionForm, ribMatching: 'MISMATCH' })}
+                      >
+                        <X size={15} /> Color / Shade Variation Hai (Mismatch)
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -2145,7 +2477,7 @@ export default function DyeingShortageReport() {
                     <span className="verdict-title">
                       FINAL QC VERDICT (अंतिम निर्णय)
                     </span>
-                    <span className="verdict-sub">Select overall lot approval</span>
+                    <span className="verdict-sub">Mandatory Approval Decision</span>
                   </div>
 
                   <div className="verdict-btn-group">
@@ -2154,7 +2486,7 @@ export default function DyeingShortageReport() {
                       className={`verdict-btn ${inspectionForm.overallVerdict === 'APPROVED' ? 'pass' : ''}`}
                       onClick={() => setInspectionForm({ ...inspectionForm, overallVerdict: 'APPROVED' })}
                     >
-                      <CheckCircle2 size={18} />
+                      <CheckCircle2 size={19} />
                       <span>APPROVED FOR PRODUCTION (पास)</span>
                     </button>
 
@@ -2163,7 +2495,7 @@ export default function DyeingShortageReport() {
                       className={`verdict-btn ${inspectionForm.overallVerdict === 'REJECTED' ? 'fail' : ''}`}
                       onClick={() => setInspectionForm({ ...inspectionForm, overallVerdict: 'REJECTED' })}
                     >
-                      <AlertTriangle size={18} />
+                      <AlertTriangle size={19} />
                       <span>REJECT / HOLD LOT (फेल / रोकें)</span>
                     </button>
                   </div>
@@ -2197,7 +2529,7 @@ export default function DyeingShortageReport() {
               <div className="modal-footer-sticky">
                 <button
                   type="button"
-                  className="btn btn-secondary"
+                  className="btn-modal-cancel"
                   onClick={() => setSelectedInspectionRecord(null)}
                   disabled={savingInspection}
                 >
@@ -2205,14 +2537,14 @@ export default function DyeingShortageReport() {
                 </button>
                 <button
                   type="submit"
-                  className="btn btn-primary px-6"
+                  className="btn-modal-submit"
                   disabled={savingInspection}
                 >
                   {savingInspection ? (
                     <span>Saving Inspection...</span>
                   ) : (
                     <>
-                      <Save size={15} />
+                      <Save size={16} />
                       <span>Save & Complete Final Inspection</span>
                     </>
                   )}

@@ -1,4 +1,9 @@
-export const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://fabric-app-backend-new.onrender.com/api';
+export const BASE_URL = (() => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (envUrl) return envUrl;
+  return 'https://fabric-app-backend-production.up.railway.app/api';
+})();
+
 
 
 const getHeaders = () => {
@@ -104,7 +109,8 @@ export const store = {
   // --- MATERIALS ---
   getMaterials: async (filters = {}) => {
     const params = new URLSearchParams();
-    Object.entries(filters).forEach(([key, val]) => {
+    const { signal, ...rest } = filters;
+    Object.entries(rest).forEach(([key, val]) => {
       if (val !== undefined && val !== null && val !== '') {
         params.append(key, val);
       }
@@ -113,6 +119,7 @@ export const store = {
     const queryString = params.toString() ? `?${params.toString()}` : '';
     return fetch(`${BASE_URL}/materials${queryString}`, {
       headers: getHeaders(),
+      signal
     }).then(handleResponse);
   },
 
@@ -223,40 +230,44 @@ export const store = {
     }).then(handleResponse);
   },
 
-  getRooms: async () => {
-    return fetch(`${BASE_URL}/settings`, {
-      headers: getHeaders(),
-    }).then(handleResponse).then(data => data.rooms || []);
+  _settingsPromise: null,
+  getSettings: function() {
+    if (!this._settingsPromise) {
+      this._settingsPromise = fetch(`${BASE_URL}/settings`, {
+        headers: getHeaders(),
+      })
+        .then(handleResponse)
+        .finally(() => {
+          setTimeout(() => {
+            this._settingsPromise = null;
+          }, 3000);
+        });
+    }
+    return this._settingsPromise;
   },
 
-  getFloors: async () => {
-    return fetch(`${BASE_URL}/settings`, {
-      headers: getHeaders(),
-    }).then(handleResponse).then(data => data.floors || []);
+  getRooms: function() {
+    return this.getSettings().then(data => data.rooms || []);
   },
 
-  getRacks: async () => {
-    return fetch(`${BASE_URL}/settings`, {
-      headers: getHeaders(),
-    }).then(handleResponse).then(data => data.racks || []);
+  getFloors: function() {
+    return this.getSettings().then(data => data.floors || []);
   },
 
-  getShelves: async () => {
-    return fetch(`${BASE_URL}/settings`, {
-      headers: getHeaders(),
-    }).then(handleResponse).then(data => data.shelves || []);
+  getRacks: function() {
+    return this.getSettings().then(data => data.racks || []);
   },
 
-  getSuppliers: async () => {
-    return fetch(`${BASE_URL}/settings`, {
-      headers: getHeaders(),
-    }).then(handleResponse).then(data => data.suppliers || []);
+  getShelves: function() {
+    return this.getSettings().then(data => data.shelves || []);
   },
 
-  getAuditLog: async () => {
-    return fetch(`${BASE_URL}/settings`, {
-      headers: getHeaders(),
-    }).then(handleResponse).then(data => data.auditLog || []);
+  getSuppliers: function() {
+    return this.getSettings().then(data => data.suppliers || []);
+  },
+
+  getAuditLog: function() {
+    return this.getSettings().then(data => data.auditLog || []);
   },
 
   addRoom: async (roomData) => {
@@ -687,6 +698,42 @@ export const store = {
   fetchDyeingRecdWeightByLot: async (lotNo) => {
     const response = await fetch(`${BASE_URL}/dyeing-materials/recd-weight-by-lot/${encodeURIComponent(lotNo)}`, {
       method: 'GET',
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  getNextBarcodeId: async () => {
+    const response = await fetch(`${BASE_URL}/google-sheets/next-barcode-id?t=${Date.now()}`, {
+      method: 'GET',
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  storeDyeingData: async (payload) => {
+    const response = await fetch(`${BASE_URL}/google-sheets/store-dyeing-data`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(response);
+  },
+
+  getRecentDyeingMaterials: async (lotNumber = '', limit = 60) => {
+    const qs = new URLSearchParams();
+    if (lotNumber) qs.append('lotNumber', lotNumber);
+    if (limit) qs.append('limit', limit);
+    const response = await fetch(`${BASE_URL}/dyeing-materials/recent?${qs.toString()}`, {
+      method: 'GET',
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  deleteDyeingMaterial: async (id) => {
+    const response = await fetch(`${BASE_URL}/dyeing-materials/${id}`, {
+      method: 'DELETE',
       headers: getHeaders(),
     });
     return handleResponse(response);

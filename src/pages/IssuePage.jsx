@@ -1193,12 +1193,6 @@ const FabricIssued = () => {
 
     console.log('🔍 Searching for Barcode ID (On-demand):', barcodeId);
 
-    if (isBarcodeGloballyIssued(barcodeId)) {
-      alert(`❌ DUPLICATE BARCODE REJECTED!\n\nBarcode ID: ${barcodeId}\n\nThis barcode has ALREADY BEEN ISSUED in a previous transaction.`);
-      setBarcodeInput('');
-      return;
-    }
-
     let matchingRoll = null;
     try {
       const response = await fetch(`${API_BASE_URL}/google-sheets/fabric-roll/${encodeURIComponent(barcodeId)}`);
@@ -1218,9 +1212,16 @@ const FabricIssued = () => {
       return;
     }
 
-    const rollStatus = matchingRoll['Status'] || 'in_stock';
+    const rollStatus = (matchingRoll['Status'] || 'in_stock').toLowerCase();
     if (rollStatus === 'issued') {
       alert(`❌ Roll ${barcodeId} has already been issued!\n\nStatus: ${rollStatus}`);
+      setBarcodeInput('');
+      return;
+    }
+
+    const isReturnRoll = Boolean(matchingRoll.isReturn || barcodeId.startsWith('R') || barcodeId.startsWith('RET-'));
+    if (!isReturnRoll && rollStatus !== 'in_stock' && isBarcodeGloballyIssued(barcodeId)) {
+      alert(`❌ DUPLICATE BARCODE REJECTED!\n\nBarcode ID: ${barcodeId}\n\nThis barcode has ALREADY BEEN ISSUED in a previous transaction.`);
       setBarcodeInput('');
       return;
     }
@@ -1229,11 +1230,13 @@ const FabricIssued = () => {
     const jobFabric = selectedJob['Fabric'] || '';
 
     const fabricMatch = rollItemDescription.toLowerCase().includes(jobFabric.toLowerCase()) ||
-      jobFabric.toLowerCase().includes(rollItemDescription.toLowerCase());
+      jobFabric.toLowerCase().includes(rollItemDescription.toLowerCase()) ||
+      (isReturnRoll && matchingRoll['Lot Number'] && String(matchingRoll['Lot Number']) === String(selectedJob['Lot Number']));
 
     const rollShade = matchingRoll['Shade'] || '';
     const normalizedRollShade = normalizeShadeName(rollShade);
-    const shadeMatch = normalizedRollShade.toLowerCase() === selectedShadeNormalizedName.toLowerCase();
+    const shadeMatch = normalizedRollShade.toLowerCase() === selectedShadeNormalizedName.toLowerCase() ||
+      (isReturnRoll && (!selectedShadeNormalizedName || normalizedRollShade.toLowerCase().includes(selectedShadeNormalizedName.toLowerCase())));
 
     // Check if there is any mismatch (fabric or shade)
     if (!fabricMatch || !shadeMatch) {

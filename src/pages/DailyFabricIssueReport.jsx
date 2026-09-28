@@ -75,18 +75,29 @@ export default function DailyFabricIssueReport() {
   const [endDate, setEndDate] = useState(() => {
     return new Date().toISOString().slice(0, 10);
   });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [excelLoading, setExcelLoading] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
+  const [cachedAttendance, setCachedAttendance] = useState(null);
   const [reportData, setReportData] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
 
   const fetchReport = async () => {
     setLoading(true);
     try {
-      const response = await store.getDailyFabricIssuanceReport('', '');
+      // Parallel fetch report data and pre-fetch attendance for instant PDF export
+      const [response, attData] = await Promise.all([
+        store.getDailyFabricIssuanceReport('', ''),
+        getTodayAttendanceText().catch(() => null)
+      ]);
       if (response && response.success) {
         setReportData(response.data || []);
       } else {
         setReportData([]);
+      }
+      if (attData) {
+        setCachedAttendance(attData);
       }
     } catch (err) {
       console.error("Error loading daily fabric issue report:", err);
@@ -263,67 +274,82 @@ export default function DailyFabricIssueReport() {
 
   // Excel exporter (Multi-sheet summary with lot list)
   const exportToExcel = () => {
-    if (filteredData.length === 0) {
-      alert("No data available to export.");
+    if (filteredData.length === 0 || excelLoading) {
+      if (filteredData.length === 0) alert("No data available to export.");
       return;
     }
 
-    const tableData = tableSummary.map((item, idx) => ({
-      "SR": idx + 1,
-      "Table Name": item.name,
-      "Lot Number(s)": Array.from(item.lots).sort().join(', '),
-      "Total Rolls Issued": item.rolls,
-      "Total Weight Issued (KG)": parseFloat(item.weight.toFixed(2)),
-      "Unique Lots Count": item.uniqueLotsCount,
-      "Roll Share (%)": `${item.percentage}%`
-    }));
+    setExcelLoading(true);
+    setToastMessage({ type: 'info', text: '📊 Preparing Excel report...' });
 
-    const fabricData = fabricSummary.map((item, idx) => ({
-      "SR": idx + 1,
-      "Fabric Description": item.name,
-      "Lot Number(s)": Array.from(item.lots).sort().join(', '),
-      "Total Rolls Issued": item.rolls,
-      "Total Weight Issued (KG)": parseFloat(item.weight.toFixed(2)),
-      "Unique Lots Count": item.uniqueLotsCount,
-      "Unique Shades Count": item.uniqueShadesCount,
-      "Roll Share (%)": `${item.percentage}%`
-    }));
+    setTimeout(() => {
+      try {
+        const tableData = tableSummary.map((item, idx) => ({
+          "SR": idx + 1,
+          "Table Name": item.name,
+          "Lot Number(s)": Array.from(item.lots).sort().join(', '),
+          "Total Rolls Issued": item.rolls,
+          "Total Weight Issued (KG)": parseFloat(item.weight.toFixed(2)),
+          "Unique Lots Count": item.uniqueLotsCount,
+          "Roll Share (%)": `${item.percentage}%`
+        }));
 
-    const wb = XLSX.utils.book_new();
+        const fabricData = fabricSummary.map((item, idx) => ({
+          "SR": idx + 1,
+          "Fabric Description": item.name,
+          "Lot Number(s)": Array.from(item.lots).sort().join(', '),
+          "Total Rolls Issued": item.rolls,
+          "Total Weight Issued (KG)": parseFloat(item.weight.toFixed(2)),
+          "Unique Lots Count": item.uniqueLotsCount,
+          "Unique Shades Count": item.uniqueShadesCount,
+          "Roll Share (%)": `${item.percentage}%`
+        }));
 
-    // Sheet 1: Table Summary
-    const wsTable = XLSX.utils.json_to_sheet(tableData);
-    let range = XLSX.utils.decode_range(wsTable['!ref']);
-    for (let c = range.s.c; c <= range.e.c; c++) {
-      const headerCell = XLSX.utils.encode_cell({ r: 0, c });
-      if (wsTable[headerCell]) {
-        wsTable[headerCell].s = {
-          fill: { fgColor: { rgb: "334155" } }, // Slate-700
-          font: { bold: true, color: { rgb: "FFFFFF" }, name: "Calibri", sz: 11 },
-          alignment: { horizontal: "center", vertical: "center" }
-        };
+        const wb = XLSX.utils.book_new();
+
+        // Sheet 1: Table Summary
+        const wsTable = XLSX.utils.json_to_sheet(tableData);
+        let range = XLSX.utils.decode_range(wsTable['!ref']);
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          const headerCell = XLSX.utils.encode_cell({ r: 0, c });
+          if (wsTable[headerCell]) {
+            wsTable[headerCell].s = {
+              fill: { fgColor: { rgb: "334155" } }, // Slate-700
+              font: { bold: true, color: { rgb: "FFFFFF" }, name: "Calibri", sz: 11 },
+              alignment: { horizontal: "center", vertical: "center" }
+            };
+          }
+        }
+        wsTable['!cols'] = [{ wch: 6 }, { wch: 18 }, { wch: 25 }, { wch: 18 }, { wch: 22 }, { wch: 18 }, { wch: 15 }];
+        XLSX.utils.book_append_sheet(wb, wsTable, "Table-wise Summary");
+
+        // Sheet 2: Fabric Summary
+        const wsFabric = XLSX.utils.json_to_sheet(fabricData);
+        range = XLSX.utils.decode_range(wsFabric['!ref']);
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          const headerCell = XLSX.utils.encode_cell({ r: 0, c });
+          if (wsFabric[headerCell]) {
+            wsFabric[headerCell].s = {
+              fill: { fgColor: { rgb: "475569" } }, // Slate-600
+              font: { bold: true, color: { rgb: "FFFFFF" }, name: "Calibri", sz: 11 },
+              alignment: { horizontal: "center", vertical: "center" }
+            };
+          }
+        }
+        wsFabric['!cols'] = [{ wch: 6 }, { wch: 30 }, { wch: 25 }, { wch: 18 }, { wch: 22 }, { wch: 18 }, { wch: 18 }, { wch: 15 }];
+        XLSX.utils.book_append_sheet(wb, wsFabric, "Fabric-wise Summary");
+
+        XLSX.writeFile(wb, `Daily_Fabric_Issue_Summary_${startDate || 'all'}_to_${endDate || 'all'}.xlsx`);
+        setToastMessage({ type: 'success', text: '✅ Excel report downloaded successfully!' });
+        setTimeout(() => setToastMessage(null), 3500);
+      } catch (err) {
+        console.error('Excel generation failed:', err);
+        setToastMessage({ type: 'error', text: '❌ Failed to export Excel: ' + err.message });
+        setTimeout(() => setToastMessage(null), 4000);
+      } finally {
+        setExcelLoading(false);
       }
-    }
-    wsTable['!cols'] = [{ wch: 6 }, { wch: 18 }, { wch: 25 }, { wch: 18 }, { wch: 22 }, { wch: 18 }, { wch: 15 }];
-    XLSX.utils.book_append_sheet(wb, wsTable, "Table-wise Summary");
-
-    // Sheet 2: Fabric Summary
-    const wsFabric = XLSX.utils.json_to_sheet(fabricData);
-    range = XLSX.utils.decode_range(wsFabric['!ref']);
-    for (let c = range.s.c; c <= range.e.c; c++) {
-      const headerCell = XLSX.utils.encode_cell({ r: 0, c });
-      if (wsFabric[headerCell]) {
-        wsFabric[headerCell].s = {
-          fill: { fgColor: { rgb: "475569" } }, // Slate-600
-          font: { bold: true, color: { rgb: "FFFFFF" }, name: "Calibri", sz: 11 },
-          alignment: { horizontal: "center", vertical: "center" }
-        };
-      }
-    }
-    wsFabric['!cols'] = [{ wch: 6 }, { wch: 30 }, { wch: 25 }, { wch: 18 }, { wch: 22 }, { wch: 18 }, { wch: 18 }, { wch: 15 }];
-    XLSX.utils.book_append_sheet(wb, wsFabric, "Fabric-wise Summary");
-
-    XLSX.writeFile(wb, `Daily_Fabric_Issue_Summary_${startDate}_to_${endDate}.xlsx`);
+    }, 20);
   };
 
   const getTodayAttendanceText = async () => {
@@ -373,7 +399,7 @@ export default function DailyFabricIssueReport() {
         });
       }
     } catch (e) {
-      console.error("Failed to load today's attendance for PDF:", e);
+      console.warn("Notice: Today attendance for PDF unavailable:", e.message);
     }
 
     const uniqueAbsentees = [...new Set(absentees)];
@@ -384,267 +410,285 @@ export default function DailyFabricIssueReport() {
     };
   };
 
-  // PDF exporter (Grayscale / Professional Layout)
+  // High-Speed PDF exporter (Vector Graphics / Clean Minimalist Design)
   const exportToPdf = async () => {
-    if (filteredData.length === 0) {
-      alert("No data available to export.");
+    if (filteredData.length === 0 || pdfLoading) {
+      if (filteredData.length === 0) alert("No data available to export.");
       return;
     }
 
-    // Fetch today's attendance
-    const attData = await getTodayAttendanceText();
+    setPdfLoading(true);
+    setToastMessage({ type: 'info', text: '📄 Generating Daily Fabric Issue PDF Report...' });
 
-    const doc = new jsPDF({
-      orientation: "portrait",
-      unit: "pt",
-      format: "a4"
-    });
+    // Yield control to event loop so browser repaints the button spinner and toast immediately
+    await new Promise(resolve => setTimeout(resolve, 30));
 
-    const PAGE_W = doc.internal.pageSize.getWidth();
-    const PAGE_H = doc.internal.pageSize.getHeight();
-    const M = 40; // Margin
-    let y = 35;
+    try {
+      // Use pre-fetched attendance instantly (0ms network delay), or fallback to quick call
+      const attData = cachedAttendance || await getTodayAttendanceText();
 
-    const setFont = (style, size) => {
-      doc.setFont("helvetica", style);
-      doc.setFontSize(size);
-    };
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "pt",
+        format: "a4",
+        compress: true
+      });
 
-    // Left Side - Blank Circle with Number inside (Non-colorful Black & White)
-    const circleR = 12;
-    const circleX = M + circleR;
-    const circleY = y + 17;
+      const PAGE_W = doc.internal.pageSize.getWidth();
+      const PAGE_H = doc.internal.pageSize.getHeight();
+      const M = 40; // Margin
+      let y = 35;
 
-    // Draw Blank Circle with solid black stroke
-    doc.setFillColor(255, 255, 255);
-    doc.setDrawColor(0, 0, 0);
-    doc.setLineWidth(1.4);
-    doc.circle(circleX, circleY, circleR, "FD");
+      const setFont = (style, size) => {
+        doc.setFont("helvetica", style);
+        doc.setFontSize(size);
+      };
 
-    // Round number written inside the circle
-    doc.setTextColor(0, 0, 0);
-    setFont("bold", 12);
-    doc.text("1", circleX, circleY + 4, { align: "center" });
+      // Left Side - Blank Circle with Number inside (Non-colorful Black & White)
+      const circleR = 12;
+      const circleX = M + circleR;
+      const circleY = y + 17;
 
-    // Numbering Label & Title
-    setFont("bold", 8);
-    doc.setTextColor(0, 0, 0);
-    doc.text("1ST REPORT", M + 30, y + 11);
+      // Draw Blank Circle with solid black stroke
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(1.4);
+      doc.circle(circleX, circleY, circleR, "FD");
 
-    setFont("bold", 13);
-    doc.setTextColor(0, 0, 0);
-    doc.text("DAILY FABRIC ISSUANCE ANALYSIS", M + 30, y + 25);
+      // Round number written inside the circle
+      doc.setTextColor(0, 0, 0);
+      setFont("bold", 12);
+      doc.text("1", circleX, circleY + 4, { align: "center" });
 
-    setFont("normal", 8);
-    doc.setTextColor(80, 80, 80);
-    doc.text(`Period: ${startDate} to ${endDate}  |  Generated: ${new Date().toLocaleDateString()}`, M + 30, y + 36);
+      // Numbering Label & Title
+      setFont("bold", 8);
+      doc.setTextColor(0, 0, 0);
+      doc.text("1ST REPORT", M + 30, y + 11);
 
-    // Right Side - Today's Attendance Block
-    doc.setTextColor(0, 0, 0);
-    setFont("bold", 8);
-    doc.text("TODAY'S ATTENDANCE SUMMARY", PAGE_W - M - 230, y + 10);
-    setFont("normal", 7.5);
-    doc.setTextColor(60, 60, 60);
-    doc.text(attData.summary, PAGE_W - M - 230, y + 21);
-    doc.text(attData.absenteesText, PAGE_W - M - 230, y + 31);
+      setFont("bold", 13);
+      doc.setTextColor(0, 0, 0);
+      doc.text("DAILY FABRIC ISSUANCE ANALYSIS", M + 30, y + 25);
 
-    // Divider Line
-    doc.setDrawColor(0, 0, 0);
-    doc.setLineWidth(1);
-    doc.line(M, y + 44, PAGE_W - M, y + 44);
+      setFont("normal", 8);
+      doc.setTextColor(80, 80, 80);
+      doc.text(`Period: ${startDate || 'All Time'} to ${endDate || 'All Time'}  |  Generated: ${new Date().toLocaleDateString()}`, M + 30, y + 36);
 
-    y += 58;
+      // Right Side - Today's Attendance Block
+      doc.setTextColor(0, 0, 0);
+      setFont("bold", 8);
+      doc.text("TODAY'S ATTENDANCE SUMMARY", PAGE_W - M - 230, y + 10);
+      setFont("normal", 7.5);
+      doc.setTextColor(60, 60, 60);
+      doc.text(attData.summary, PAGE_W - M - 230, y + 21);
+      doc.text(attData.absenteesText, PAGE_W - M - 230, y + 31);
 
-    // Grayscale Summary Box
-    doc.setDrawColor(226, 232, 240); // slate-200
-    doc.setLineWidth(0.5);
-    doc.rect(M, y, PAGE_W - 2 * M, 45);
+      // Divider Line
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(1);
+      doc.line(M, y + 44, PAGE_W - M, y + 44);
 
-    setFont("bold", 8.5);
-    doc.setTextColor(71, 85, 105); // slate-600
-    doc.text("TOTAL ROLLS ISSUED", M + 20, y + 18);
-    doc.text("TOTAL WEIGHT ISSUED", M + 150, y + 18);
-    doc.text("ENGAGED TABLES", M + 280, y + 18);
-    doc.text("UNIQUE FABRIC TYPES", M + 400, y + 18);
+      y += 58;
 
-    setFont("bold", 12);
-    doc.setTextColor(15, 23, 42);
-    doc.text(`${stats.totalRolls}`, M + 20, y + 34);
-    doc.text(`${stats.totalWeight.toFixed(1)} kg`, M + 150, y + 34);
-    doc.text(`${stats.activeTables.size}`, M + 280, y + 34);
-    doc.text(`${stats.uniqueFabrics.size}`, M + 400, y + 34);
-    y += 70;
+      // Grayscale Summary Box
+      doc.setDrawColor(226, 232, 240); // slate-200
+      doc.setLineWidth(0.5);
+      doc.rect(M, y, PAGE_W - 2 * M, 45);
 
-    // ── SECTION 1: CUTTING TABLE SUMMARY ──────────────────────────────────
-    setFont("bold", 11);
-    doc.setTextColor(30, 41, 59); // slate-800
-    doc.text("1. Cutting Table Summary", M, y);
-    y += 12;
+      setFont("bold", 8.5);
+      doc.setTextColor(71, 85, 105); // slate-600
+      doc.text("TOTAL ROLLS ISSUED", M + 20, y + 18);
+      doc.text("TOTAL WEIGHT ISSUED", M + 150, y + 18);
+      doc.text("ENGAGED TABLES", M + 280, y + 18);
+      doc.text("UNIQUE FABRIC TYPES", M + 400, y + 18);
 
-    const tHeaders = ["Table", "Lot Numbers", "Rolls", "Weight (KG)", "Share (%)"];
-    const tColWidths = [100, 180, 60, 100, 75];
-    let tTotalW = tColWidths.reduce((a, b) => a + b, 0);
+      setFont("bold", 12);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`${stats.totalRolls}`, M + 20, y + 34);
+      doc.text(`${stats.totalWeight.toFixed(1)} kg`, M + 150, y + 34);
+      doc.text(`${stats.activeTables.size}`, M + 280, y + 34);
+      doc.text(`${stats.uniqueFabrics.size}`, M + 400, y + 34);
+      y += 70;
 
-    // Thick border above table header
-    doc.setDrawColor(15, 23, 42);
-    doc.setLineWidth(1.5);
-    doc.line(M, y, M + tTotalW, y);
+      // ── SECTION 1: CUTTING TABLE SUMMARY ──────────────────────────────────
+      setFont("bold", 11);
+      doc.setTextColor(30, 41, 59); // slate-800
+      doc.text("1. Cutting Table Summary", M, y);
+      y += 12;
 
-    setFont("bold", 9);
-    doc.setTextColor(15, 23, 42);
-    let tx = M;
-    tHeaders.forEach((h, idx) => {
-      const align = (idx === 2 || idx === 3 || idx === 4) ? "right" : "left";
-      const offset = align === "right" ? tColWidths[idx] - 10 : 10;
-      doc.text(h, tx + offset, y + 14, { align });
-      tx += tColWidths[idx];
-    });
+      const tHeaders = ["Table", "Lot Numbers", "Rolls", "Weight (KG)", "Share (%)"];
+      const tColWidths = [100, 180, 60, 100, 75];
+      let tTotalW = tColWidths.reduce((a, b) => a + b, 0);
 
-    // Divider line underneath headers
-    doc.setLineWidth(0.75);
-    doc.line(M, y + 20, M + tTotalW, y + 20);
-    y += 20;
+      // Thick border above table header
+      doc.setDrawColor(15, 23, 42);
+      doc.setLineWidth(1.5);
+      doc.line(M, y, M + tTotalW, y);
 
-    setFont("normal", 8.5);
-    doc.setTextColor(51, 65, 85);
-    tableSummary.forEach((item) => {
-      const lotsStr = Array.from(item.lots).sort().join(', ');
-      const truncatedLots = lotsStr.length > 38 ? lotsStr.slice(0, 35) + '...' : lotsStr;
+      setFont("bold", 9);
+      doc.setTextColor(15, 23, 42);
+      let tx = M;
+      tHeaders.forEach((h, idx) => {
+        const align = (idx === 2 || idx === 3 || idx === 4) ? "right" : "left";
+        const offset = align === "right" ? tColWidths[idx] - 10 : 10;
+        doc.text(h, tx + offset, y + 14, { align });
+        tx += tColWidths[idx];
+      });
 
+      // Divider line underneath headers
+      doc.setLineWidth(0.75);
+      doc.line(M, y + 20, M + tTotalW, y + 20);
+      y += 20;
+
+      setFont("normal", 8.5);
+      doc.setTextColor(51, 65, 85);
+      
+      tableSummary.forEach((item) => {
+        const lotsStr = Array.from(item.lots).sort().join(', ');
+        const truncatedLots = lotsStr.length > 38 ? lotsStr.slice(0, 35) + '...' : lotsStr;
+
+        let rx = M;
+        doc.text(item.name, rx + 10, y + 11); rx += tColWidths[0];
+        doc.text(truncatedLots, rx + 10, y + 11); rx += tColWidths[1];
+        doc.text(String(item.rolls), rx + tColWidths[2] - 10, y + 11, { align: "right" }); rx += tColWidths[2];
+        doc.text(item.weight.toFixed(1), rx + tColWidths[3] - 10, y + 11, { align: "right" }); rx += tColWidths[3];
+        doc.text(`${item.percentage}%`, rx + tColWidths[4] - 10, y + 11, { align: "right" });
+
+        y += 16;
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.5);
+        doc.line(M, y, M + tTotalW, y);
+      });
+
+      // Total Row Table 1
+      const tTotalRolls = tableSummary.reduce((sum, item) => sum + item.rolls, 0);
+      const tTotalWeight = tableSummary.reduce((sum, item) => sum + item.weight, 0);
+
+      setFont("bold", 8.5);
+      doc.setTextColor(15, 23, 42);
       let rx = M;
-      doc.text(item.name, rx + 10, y + 11); rx += tColWidths[0];
-      doc.text(truncatedLots, rx + 10, y + 11); rx += tColWidths[1];
-      doc.text(String(item.rolls), rx + tColWidths[2] - 10, y + 11, { align: "right" }); rx += tColWidths[2];
-      doc.text(item.weight.toFixed(1), rx + tColWidths[3] - 10, y + 11, { align: "right" }); rx += tColWidths[3];
-      doc.text(`${item.percentage}%`, rx + tColWidths[4] - 10, y + 11, { align: "right" });
+      doc.text("Total", rx + 10, y + 11); rx += tColWidths[0];
+      doc.text("", rx + 10, y + 11); rx += tColWidths[1];
+      doc.text(String(tTotalRolls), rx + tColWidths[2] - 10, y + 11, { align: "right" }); rx += tColWidths[2];
+      doc.text(tTotalWeight.toFixed(1), rx + tColWidths[3] - 10, y + 11, { align: "right" }); rx += tColWidths[3];
+      doc.text("100%", rx + tColWidths[4] - 10, y + 11, { align: "right" });
 
       y += 16;
-      doc.setDrawColor(226, 232, 240);
-      doc.setLineWidth(0.5);
+      doc.setDrawColor(15, 23, 42);
+      doc.setLineWidth(1);
       doc.line(M, y, M + tTotalW, y);
-    });
+      y += 35;
 
-    // Total Row Table 1
-    const tTotalRolls = tableSummary.reduce((sum, item) => sum + item.rolls, 0);
-    const tTotalWeight = tableSummary.reduce((sum, item) => sum + item.weight, 0);
-
-    setFont("bold", 8.5);
-    doc.setTextColor(15, 23, 42);
-    let rx = M;
-    doc.text("Total", rx + 10, y + 11); rx += tColWidths[0];
-    doc.text("", rx + 10, y + 11); rx += tColWidths[1];
-    doc.text(String(tTotalRolls), rx + tColWidths[2] - 10, y + 11, { align: "right" }); rx += tColWidths[2];
-    doc.text(tTotalWeight.toFixed(1), rx + tColWidths[3] - 10, y + 11, { align: "right" }); rx += tColWidths[3];
-    doc.text("100%", rx + tColWidths[4] - 10, y + 11, { align: "right" });
-
-    y += 16;
-    doc.setDrawColor(15, 23, 42);
-    doc.setLineWidth(1);
-    doc.line(M, y, M + tTotalW, y);
-    y += 35;
-
-    // ── SECTION 2: FABRIC TYPE SUMMARY ────────────────────────────────────
-    if (y + 160 > PAGE_H) {
-      doc.addPage();
-      y = 50;
-    }
-
-    setFont("bold", 11);
-    doc.setTextColor(30, 41, 59);
-    doc.text("2. Fabric Description Summary", M, y);
-    y += 12;
-
-    const fHeaders = ["Fabric Description", "Lot Numbers", "Rolls", "Weight (KG)", "Share (%)"];
-    const fColWidths = [120, 150, 60, 100, 75];
-    let fTotalW = fColWidths.reduce((a, b) => a + b, 0);
-
-    // Thick border above table header
-    doc.setDrawColor(15, 23, 42);
-    doc.setLineWidth(1.5);
-    doc.line(M, y, M + fTotalW, y);
-
-    setFont("bold", 9);
-    doc.setTextColor(15, 23, 42);
-    tx = M;
-    fHeaders.forEach((h, idx) => {
-      const align = (idx === 2 || idx === 3 || idx === 4) ? "right" : "left";
-      const offset = align === "right" ? fColWidths[idx] - 10 : 10;
-      doc.text(h, tx + offset, y + 14, { align });
-      tx += fColWidths[idx];
-    });
-
-    // Divider line underneath headers
-    doc.setLineWidth(0.75);
-    doc.line(M, y + 20, M + fTotalW, y + 20);
-    y += 20;
-
-    setFont("normal", 8.5);
-    doc.setTextColor(51, 65, 85);
-    fabricSummary.forEach((item) => {
-      if (y + 20 > PAGE_H - 40) {
+      // ── SECTION 2: FABRIC TYPE SUMMARY ────────────────────────────────────
+      if (y + 160 > PAGE_H) {
         doc.addPage();
         y = 50;
-        doc.setDrawColor(15, 23, 42);
-        doc.setLineWidth(1.5);
-        doc.line(M, y, M + fTotalW, y);
-
-        setFont("bold", 9);
-        doc.setTextColor(15, 23, 42);
-        let tfx = M;
-        fHeaders.forEach((h, fIdx) => {
-          const align = (fIdx === 2 || fIdx === 3 || fIdx === 4) ? "right" : "left";
-          const offset = align === "right" ? fColWidths[fIdx] - 10 : 10;
-          doc.text(h, tfx + offset, y + 14, { align });
-          tfx += fColWidths[fIdx];
-        });
-        y += 20;
-        setFont("normal", 8.5);
-        doc.setTextColor(51, 65, 85);
       }
 
-      const lotsStr = Array.from(item.lots).sort().join(', ');
-      const truncatedLots = lotsStr.length > 32 ? lotsStr.slice(0, 29) + '...' : lotsStr;
+      setFont("bold", 11);
+      doc.setTextColor(30, 41, 59);
+      doc.text("2. Fabric Description Summary", M, y);
+      y += 12;
 
-      let rx = M;
-      doc.text(item.name.length > 25 ? item.name.slice(0, 22) + '...' : item.name, rx + 10, y + 11); rx += fColWidths[0];
-      doc.text(truncatedLots, rx + 10, y + 11); rx += fColWidths[1];
-      doc.text(String(item.rolls), rx + fColWidths[2] - 10, y + 11, { align: "right" }); rx += fColWidths[2];
-      doc.text(item.weight.toFixed(1), rx + fColWidths[3] - 10, y + 11, { align: "right" }); rx += fColWidths[3];
-      doc.text(`${item.percentage}%`, rx + fColWidths[4] - 10, y + 11, { align: "right" });
+      const fHeaders = ["Fabric Description", "Lot Numbers", "Rolls", "Weight (KG)", "Share (%)"];
+      const fColWidths = [120, 150, 60, 100, 75];
+      let fTotalW = fColWidths.reduce((a, b) => a + b, 0);
+
+      // Thick border above table header
+      doc.setDrawColor(15, 23, 42);
+      doc.setLineWidth(1.5);
+      doc.line(M, y, M + fTotalW, y);
+
+      setFont("bold", 9);
+      doc.setTextColor(15, 23, 42);
+      tx = M;
+      fHeaders.forEach((h, idx) => {
+        const align = (idx === 2 || idx === 3 || idx === 4) ? "right" : "left";
+        const offset = align === "right" ? fColWidths[idx] - 10 : 10;
+        doc.text(h, tx + offset, y + 14, { align });
+        tx += fColWidths[idx];
+      });
+
+      // Divider line underneath headers
+      doc.setLineWidth(0.75);
+      doc.line(M, y + 20, M + fTotalW, y + 20);
+      y += 20;
+
+      setFont("normal", 8.5);
+      doc.setTextColor(51, 65, 85);
+      fabricSummary.forEach((item) => {
+        if (y + 20 > PAGE_H - 40) {
+          doc.addPage();
+          y = 50;
+          doc.setDrawColor(15, 23, 42);
+          doc.setLineWidth(1.5);
+          doc.line(M, y, M + fTotalW, y);
+
+          setFont("bold", 9);
+          doc.setTextColor(15, 23, 42);
+          let tfx = M;
+          fHeaders.forEach((h, fIdx) => {
+            const align = (fIdx === 2 || fIdx === 3 || fIdx === 4) ? "right" : "left";
+            const offset = align === "right" ? fColWidths[fIdx] - 10 : 10;
+            doc.text(h, tfx + offset, y + 14, { align });
+            tfx += fColWidths[fIdx];
+          });
+          y += 20;
+          setFont("normal", 8.5);
+          doc.setTextColor(51, 65, 85);
+        }
+
+        const lotsStr = Array.from(item.lots).sort().join(', ');
+        const truncatedLots = lotsStr.length > 32 ? lotsStr.slice(0, 29) + '...' : lotsStr;
+
+        let rx = M;
+        doc.text(item.name.length > 25 ? item.name.slice(0, 22) + '...' : item.name, rx + 10, y + 11); rx += fColWidths[0];
+        doc.text(truncatedLots, rx + 10, y + 11); rx += fColWidths[1];
+        doc.text(String(item.rolls), rx + fColWidths[2] - 10, y + 11, { align: "right" }); rx += fColWidths[2];
+        doc.text(item.weight.toFixed(1), rx + fColWidths[3] - 10, y + 11, { align: "right" }); rx += fColWidths[3];
+        doc.text(`${item.percentage}%`, rx + fColWidths[4] - 10, y + 11, { align: "right" });
+
+        y += 16;
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.5);
+        doc.line(M, y, M + fTotalW, y);
+      });
+
+      // Total Row Table 2
+      const fTotalRolls = fabricSummary.reduce((sum, item) => sum + item.rolls, 0);
+      const fTotalWeight = fabricSummary.reduce((sum, item) => sum + item.weight, 0);
+
+      setFont("bold", 8.5);
+      doc.setTextColor(15, 23, 42);
+      let frx = M;
+      doc.text("Total", frx + 10, y + 11); frx += fColWidths[0];
+      doc.text("", frx + 10, y + 11); frx += fColWidths[1];
+      doc.text(String(fTotalRolls), frx + fColWidths[2] - 10, y + 11, { align: "right" }); frx += fColWidths[2];
+      doc.text(fTotalWeight.toFixed(1), frx + fColWidths[3] - 10, y + 11, { align: "right" }); frx += fColWidths[3];
+      doc.text("100%", frx + fColWidths[4] - 10, y + 11, { align: "right" });
 
       y += 16;
-      doc.setDrawColor(226, 232, 240);
-      doc.setLineWidth(0.5);
+      doc.setDrawColor(15, 23, 42);
+      doc.setLineWidth(1);
       doc.line(M, y, M + fTotalW, y);
-    });
 
-    // Total Row Table 2
-    const fTotalRolls = fabricSummary.reduce((sum, item) => sum + item.rolls, 0);
-    const fTotalWeight = fabricSummary.reduce((sum, item) => sum + item.weight, 0);
+      const pages = doc.internal.getNumberOfPages();
+      for (let p = 1; p <= pages; p++) {
+        doc.setPage(p);
+        setFont("italic", 8);
+        doc.setTextColor(148, 163, 184);
+        doc.text(`Daily Fabric Issuance Analysis  |  Page ${p} of ${pages}`, M, PAGE_H - 20);
+      }
 
-    setFont("bold", 8.5);
-    doc.setTextColor(15, 23, 42);
-    let frx = M;
-    doc.text("Total", frx + 10, y + 11); frx += fColWidths[0];
-    doc.text("", frx + 10, y + 11); frx += fColWidths[1];
-    doc.text(String(fTotalRolls), frx + fColWidths[2] - 10, y + 11, { align: "right" }); frx += fColWidths[2];
-    doc.text(fTotalWeight.toFixed(1), frx + fColWidths[3] - 10, y + 11, { align: "right" }); frx += fColWidths[3];
-    doc.text("100%", frx + fColWidths[4] - 10, y + 11, { align: "right" });
-
-    y += 16;
-    doc.setDrawColor(15, 23, 42);
-    doc.setLineWidth(1);
-    doc.line(M, y, M + fTotalW, y);
-
-    const pages = doc.internal.getNumberOfPages();
-    for (let p = 1; p <= pages; p++) {
-      doc.setPage(p);
-      setFont("italic", 8);
-      doc.setTextColor(148, 163, 184);
-      doc.text(`Daily Fabric Issuance Analysis  |  Page ${p} of ${pages}`, M, PAGE_H - 20);
+      doc.save(`Daily_Fabric_Issue_Summary_${startDate || 'all'}_to_${endDate || 'all'}.pdf`);
+      setToastMessage({ type: 'success', text: '✅ PDF downloaded successfully!' });
+      setTimeout(() => setToastMessage(null), 3500);
+    } catch (err) {
+      console.error('PDF export failed:', err);
+      setToastMessage({ type: 'error', text: '❌ Failed to generate PDF: ' + err.message });
+      setTimeout(() => setToastMessage(null), 4000);
+    } finally {
+      setPdfLoading(false);
     }
-
-    doc.save(`Daily_Fabric_Issue_Summary_${startDate}_to_${endDate}.pdf`);
   };
 
   return (
@@ -882,7 +926,51 @@ export default function DailyFabricIssueReport() {
           color: #E2E8F0;
         }
         .dark .btn-preset-filter:hover { background: #475569; }
+
+        .report-loader-bar {
+          position: relative;
+          width: 100%;
+          height: 3px;
+          background: rgba(37, 99, 235, 0.12);
+          overflow: hidden;
+          border-radius: 2px;
+        }
+        .report-loader-bar::after {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; width: 45%; height: 100%;
+          background: linear-gradient(90deg, transparent, #2563eb, #60a5fa, transparent);
+          animation: shimmerProgress 1.1s infinite ease-in-out;
+        }
+        @keyframes shimmerProgress {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(300%); }
+        }
+
+        .skeleton-bar {
+          background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%);
+          background-size: 200% 100%;
+          animation: pulseSkeleton 1.3s infinite ease-in-out;
+          border-radius: 6px;
+        }
+        .dark .skeleton-bar {
+          background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+        }
+        @keyframes pulseSkeleton {
+          0%, 100% { opacity: 0.55; }
+          50% { opacity: 0.95; }
+        }
+
+        @keyframes slideUp {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
       `}</style>
+
+      {/* Top Global Progress Loading Bar */}
+      {(loading || pdfLoading || excelLoading) && (
+        <div className="report-loader-bar" style={{ marginBottom: -10 }} />
+      )}
 
       {/* Header Panel with MD Daily Report Number Badge */}
       <div className="page-header" style={{ marginBottom: 0 }}>
@@ -928,11 +1016,58 @@ export default function DailyFabricIssueReport() {
           </p>
         </div>
         <div className="page-actions" style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary btn-sm" onClick={exportToExcel} disabled={loading || filteredData.length === 0} style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34, borderRadius: 8, fontWeight: 750 }}>
-            <Download size={13} /> Export Excel
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={exportToExcel}
+            disabled={loading || excelLoading || filteredData.length === 0}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              height: 34,
+              borderRadius: 8,
+              fontWeight: 750,
+              cursor: excelLoading ? 'wait' : 'pointer'
+            }}
+          >
+            {excelLoading ? (
+              <>
+                <RefreshCw size={13} className="spin-animation" />
+                <span>Exporting...</span>
+              </>
+            ) : (
+              <>
+                <Download size={13} />
+                <span>Export Excel</span>
+              </>
+            )}
           </button>
-          <button className="btn btn-primary btn-sm" onClick={exportToPdf} disabled={loading || filteredData.length === 0} style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34, borderRadius: 8, fontWeight: 750 }}>
-            <FileText size={13} /> Export PDF
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={exportToPdf}
+            disabled={loading || pdfLoading || filteredData.length === 0}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              height: 34,
+              borderRadius: 8,
+              fontWeight: 750,
+              cursor: pdfLoading ? 'wait' : 'pointer',
+              background: pdfLoading ? '#1e40af' : undefined
+            }}
+          >
+            {pdfLoading ? (
+              <>
+                <RefreshCw size={13} className="spin-animation" />
+                <span>Generating PDF...</span>
+              </>
+            ) : (
+              <>
+                <FileText size={13} />
+                <span>Export PDF</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -1036,7 +1171,11 @@ export default function DailyFabricIssueReport() {
             </div>
             <div>
               <div className="kpi-label-text">Issued Rolls</div>
-              <div className="kpi-value-text">{stats.totalRolls}</div>
+              {loading ? (
+                <div className="skeleton-bar" style={{ width: 65, height: 26, margin: '4px 0' }} />
+              ) : (
+                <div className="kpi-value-text">{stats.totalRolls}</div>
+              )}
             </div>
           </div>
         </div>
@@ -1049,9 +1188,13 @@ export default function DailyFabricIssueReport() {
             </div>
             <div>
               <div className="kpi-label-text">Total Weight</div>
-              <div className="kpi-value-text">
-                {stats.totalWeight.toFixed(1)} <span style={{ fontSize: 12, fontWeight: 650 }}>KG</span>
-              </div>
+              {loading ? (
+                <div className="skeleton-bar" style={{ width: 95, height: 26, margin: '4px 0' }} />
+              ) : (
+                <div className="kpi-value-text">
+                  {stats.totalWeight.toFixed(1)} <span style={{ fontSize: 12, fontWeight: 650 }}>KG</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1064,7 +1207,11 @@ export default function DailyFabricIssueReport() {
             </div>
             <div>
               <div className="kpi-label-text">Unique Lots</div>
-              <div className="kpi-value-text">{stats.uniqueLots.size}</div>
+              {loading ? (
+                <div className="skeleton-bar" style={{ width: 50, height: 26, margin: '4px 0' }} />
+              ) : (
+                <div className="kpi-value-text">{stats.uniqueLots.size}</div>
+              )}
             </div>
           </div>
         </div>
@@ -1077,23 +1224,36 @@ export default function DailyFabricIssueReport() {
             </div>
             <div>
               <div className="kpi-label-text">Cutting Tables</div>
-              <div className="kpi-value-text">{stats.activeTables.size}</div>
+              {loading ? (
+                <div className="skeleton-bar" style={{ width: 50, height: 26, margin: '4px 0' }} />
+              ) : (
+                <div className="kpi-value-text">{stats.activeTables.size}</div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
       {/* Issuance Volume & Weight Trend Chart */}
-      {filteredData.length > 0 && (
-        <div className="card premium-card" style={{ overflow: 'hidden' }}>
-          <div className="card-header card-header-styled">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div style={{ width: 3, height: 12, background: '#2563eb', borderRadius: 2 }} />
-              <div className="header-title-text">Issuance Volume & Weight Trend</div>
-            </div>
-            <span style={{ fontSize: '11px', color: '#2563eb', fontWeight: 800 }}>Daily Performance Curve</span>
+      <div className="card premium-card" style={{ overflow: 'hidden' }}>
+        <div className="card-header card-header-styled">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 3, height: 12, background: '#2563eb', borderRadius: 2 }} />
+            <div className="header-title-text">Issuance Volume & Weight Trend</div>
           </div>
-          <div className="card-body" style={{ padding: '16px 14px 6px 6px' }}>
+          <span style={{ fontSize: '11px', color: '#2563eb', fontWeight: 800 }}>Daily Performance Curve</span>
+        </div>
+        <div className="card-body" style={{ padding: '16px 14px 6px 6px' }}>
+          {loading ? (
+            <div style={{ height: 240, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <RefreshCw size={26} className="spin-animation" style={{ color: '#2563eb' }} />
+              <span style={{ fontSize: 13, fontWeight: 750, color: 'var(--text-primary)' }}>Loading issuance volume & weight analytics...</span>
+            </div>
+          ) : filteredData.length === 0 ? (
+            <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 13, fontWeight: 600 }}>
+              No trend data available for selected filter period.
+            </div>
+          ) : (
             <ResponsiveContainer width="100%" height={240}>
               <ComposedChart data={trendChartData}>
                 <defs>
@@ -1159,9 +1319,9 @@ export default function DailyFabricIssueReport() {
                 />
               </ComposedChart>
             </ResponsiveContainer>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Main Aggregated Summaries (Dual Cards side-by-side with proper borders) */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 14 }}>
@@ -1176,7 +1336,36 @@ export default function DailyFabricIssueReport() {
           </div>
           <div className="card-body" style={{ padding: 10 }}>
             {loading ? (
-              <div style={{ padding: 30, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+              <div className="table-wrap" style={{ border: 'none' }}>
+                <table className="custom-table-bordered">
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left' }}>Table</th>
+                      <th style={{ textAlign: 'left' }}>Lot Numbers</th>
+                      <th style={{ textAlign: 'right' }}>Rolls</th>
+                      <th style={{ textAlign: 'right' }}>Weight (KG)</th>
+                      <th style={{ textAlign: 'center' }}>Share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[1, 2, 3, 4, 5].map((idx) => (
+                      <tr key={idx}>
+                        <td><div className="skeleton-bar" style={{ width: '60px', height: '14px', borderRadius: 4 }} /></td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <div className="skeleton-bar" style={{ width: '38px', height: '14px', borderRadius: 4 }} />
+                            <div className="skeleton-bar" style={{ width: '38px', height: '14px', borderRadius: 4 }} />
+                            <div className="skeleton-bar" style={{ width: '38px', height: '14px', borderRadius: 4 }} />
+                          </div>
+                        </td>
+                        <td style={{ textAlign: 'right' }}><div className="skeleton-bar" style={{ width: '35px', height: '14px', marginLeft: 'auto', borderRadius: 4 }} /></td>
+                        <td style={{ textAlign: 'right' }}><div className="skeleton-bar" style={{ width: '55px', height: '14px', marginLeft: 'auto', borderRadius: 4 }} /></td>
+                        <td><div className="skeleton-bar" style={{ width: '65px', height: '10px', margin: '0 auto', borderRadius: 4 }} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : tableSummary.length === 0 ? (
               <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 12 }}>No records found.</div>
             ) : (
@@ -1237,7 +1426,36 @@ export default function DailyFabricIssueReport() {
           </div>
           <div className="card-body" style={{ padding: 10 }}>
             {loading ? (
-              <div style={{ padding: 30, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+              <div className="table-wrap" style={{ border: 'none' }}>
+                <table className="custom-table-bordered">
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left' }}>Fabric Description</th>
+                      <th style={{ textAlign: 'left' }}>Lot Numbers</th>
+                      <th style={{ textAlign: 'right' }}>Rolls</th>
+                      <th style={{ textAlign: 'right' }}>Weight (KG)</th>
+                      <th style={{ textAlign: 'center' }}>Share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[1, 2, 3, 4, 5].map((idx) => (
+                      <tr key={idx}>
+                        <td><div className="skeleton-bar" style={{ width: '120px', height: '14px', borderRadius: 4 }} /></td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <div className="skeleton-bar" style={{ width: '38px', height: '14px', borderRadius: 4 }} />
+                            <div className="skeleton-bar" style={{ width: '38px', height: '14px', borderRadius: 4 }} />
+                            <div className="skeleton-bar" style={{ width: '38px', height: '14px', borderRadius: 4 }} />
+                          </div>
+                        </td>
+                        <td style={{ textAlign: 'right' }}><div className="skeleton-bar" style={{ width: '35px', height: '14px', marginLeft: 'auto', borderRadius: 4 }} /></td>
+                        <td style={{ textAlign: 'right' }}><div className="skeleton-bar" style={{ width: '55px', height: '14px', marginLeft: 'auto', borderRadius: 4 }} /></td>
+                        <td><div className="skeleton-bar" style={{ width: '65px', height: '10px', margin: '0 auto', borderRadius: 4 }} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : fabricSummary.length === 0 ? (
               <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 12 }}>No fabric records found.</div>
             ) : (
@@ -1390,6 +1608,35 @@ export default function DailyFabricIssueReport() {
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* Floating Status Toast Notification */}
+      {toastMessage && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            zIndex: 99999,
+            background: toastMessage.type === 'error' ? '#EF4444' : '#0F172A',
+            color: '#FFFFFF',
+            padding: '12px 20px',
+            borderRadius: 10,
+            boxShadow: '0 12px 36px rgba(0,0,0,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            fontSize: '13px',
+            fontWeight: 700,
+            transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+            pointerEvents: 'none'
+          }}
+        >
+          {(pdfLoading || excelLoading) && (
+            <RefreshCw size={15} className="spin-animation" style={{ color: '#60a5fa' }} />
+          )}
+          <span>{toastMessage.text}</span>
         </div>
       )}
 

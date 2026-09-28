@@ -159,34 +159,47 @@ const DyeingMaterialForm = () => {
       try {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 3000);
-        await fetch(`${BASE_URL}/health`, { signal: ctrl.signal });
+        let res;
+        try {
+          res = await fetch(`${BASE_URL}/health`, { signal: ctrl.signal });
+        } catch (fetchErr) {
+          if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+            res = await fetch('http://localhost:5001/api/health', { signal: ctrl.signal });
+          } else {
+            throw fetchErr;
+          }
+        }
         clearTimeout(tid);
         if (!isMounted.current) return;
 
-        // ── came back ONLINE ─────────────────────────────────────────
-        if (!isOnline) {
-          setIsOnline(true);
-          showNotification('✅ Network restored! Processing queued prints...', 'success');
+        if (res.ok) {
+          // ── came back ONLINE ─────────────────────────────────────────
+          if (!isOnline) {
+            setIsOnline(true);
+            showNotification('✅ Network restored! Processing queued prints...', 'success');
 
-          // Flush offline queue
-          const queue = [...offlineQueueRef.current];
-          if (queue.length > 0) {
-            setOfflineQueue([]);
-            offlineQueueRef.current = [];
-            for (const job of queue) {
-              const stored = await storeDataInGoogleSheets(job.stickerData, job.rollNumber);
-              if (stored) {
-                if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && printServiceStatus === 'ready') {
-                  printViaPythonService(job.stickerData);
-                  showNotification(`✓ Queued Roll ${job.rollNumber} sticker printed!`, 'success');
-                } else {
-                  showNotification(`⚠️ Roll ${job.rollNumber} data saved, printer offline`, 'warning');
+            // Flush offline queue
+            const queue = [...offlineQueueRef.current];
+            if (queue.length > 0) {
+              setOfflineQueue([]);
+              offlineQueueRef.current = [];
+              for (const job of queue) {
+                const stored = await storeDataInGoogleSheets(job.stickerData, job.rollNumber);
+                if (stored) {
+                  if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && printServiceStatus === 'ready') {
+                    printViaPythonService(job.stickerData);
+                    showNotification(`✓ Queued Roll ${job.rollNumber} sticker printed!`, 'success');
+                  } else {
+                    showNotification(`⚠️ Roll ${job.rollNumber} data saved, printer offline`, 'warning');
+                  }
                 }
               }
             }
+          } else {
+            setIsOnline(true);
           }
         } else {
-          setIsOnline(true);
+          if (isMounted.current) setIsOnline(false);
         }
       } catch {
         if (isMounted.current) setIsOnline(false);
@@ -1708,7 +1721,7 @@ const DyeingMaterialForm = () => {
             <div className="breadcrumb" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 700 }}>
               <span>Home</span><span>/</span><span>Stock Add</span><span>/</span><span style={{ color: 'var(--primary, #2563EB)' }}>Dyeing Material</span>
             </div>
-            <h1 style={{ margin: '2px 0 0 0', fontSize: '22px', fontWeight: 900, letterSpacing: '-0.5px' }}>
+            <h1 className="gradient-title" style={{ margin: '2px 0 0 0', fontSize: '24px' }}>
               Add Dyeing Material (Processed Stock)
             </h1>
             <p style={{ margin: '3px 0 0 0', color: 'var(--text-muted, #64748B)', fontSize: '12.5px' }}>
@@ -1716,6 +1729,29 @@ const DyeingMaterialForm = () => {
             </p>
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => navigate('/dyeing-material-manual')}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '9px 16px',
+            borderRadius: '10px',
+            fontWeight: 800,
+            fontSize: '13px',
+            cursor: 'pointer',
+            background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
+            color: '#FFFFFF',
+            border: 'none',
+            boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+            transition: 'all 0.2s'
+          }}
+        >
+          <Scale size={16} />
+          <span>Switch to Manual Weight Mode ⚡</span>
+        </button>
       </div>
 
       {/* Connection and Instruction Banner */}

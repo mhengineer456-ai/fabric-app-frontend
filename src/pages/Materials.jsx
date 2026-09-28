@@ -674,8 +674,17 @@ const getPresetDates = (preset) => {
 export default function Materials() {
   const [materials, setMaterials] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // 300ms debounce for search input to prevent rapid multi-querying
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -728,12 +737,22 @@ export default function Materials() {
     store.getSuppliers().then(setSuppliers).catch(console.error);
   }, []);
 
-  const load = () => {
+  const abortRef = useRef(null);
+
+  const load = (pageOverride) => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
+    const targetPage = pageOverride !== undefined ? pageOverride : currentPage;
+
     store.getMaterials({
-      page: currentPage,
+      page: targetPage,
       limit: itemsPerPage,
-      search,
+      search: debouncedSearch,
       category: selectedCats.join(','),
       subCategory: selectedSubCats.join(','),
       status: selectedStatuses.join(','),
@@ -744,7 +763,8 @@ export default function Materials() {
       type: selectedTypes.join(','),
       startDate,
       endDate,
-      barcodeSeries
+      barcodeSeries,
+      signal: controller.signal
     }).then(res => {
       if (res && res.success) {
         setMaterials(res.data || []);
@@ -760,17 +780,33 @@ export default function Materials() {
         setTotalCount(rawList.length);
         setTotalPages(1);
       }
-    }).catch(console.error)
-      .finally(() => setLoading(false));
+    }).catch(err => {
+      if (err.name !== 'AbortError') {
+        console.error('Error fetching materials:', err);
+      }
+    }).finally(() => {
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
+    });
   };
 
-  // Re-fetch data when page, page limit, or filters change
+  const isFirstRender = useRef(true);
+
+  // When filters, itemsPerPage, or debouncedSearch change: reset page to 1 and fetch
   useEffect(() => {
-    load();
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      load(1);
+      return;
+    }
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    } else {
+      load(1);
+    }
   }, [
-    currentPage,
-    itemsPerPage,
-    search,
+    debouncedSearch,
     selectedCats,
     selectedSubCats,
     selectedStatuses,
@@ -781,26 +817,16 @@ export default function Materials() {
     selectedTypes,
     startDate,
     endDate,
-    barcodeSeries
+    barcodeSeries,
+    itemsPerPage
   ]);
 
-  // Reset to page 1 when search or any filters change
+  // When currentPage changes independently (pagination click)
   useEffect(() => {
-    setCurrentPage(1);
-  }, [
-    search,
-    selectedCats,
-    selectedSubCats,
-    selectedStatuses,
-    selectedSuppliers,
-    selectedColors,
-    selectedLocations,
-    selectedNames,
-    selectedTypes,
-    startDate,
-    endDate,
-    barcodeSeries
-  ]);
+    if (!isFirstRender.current) {
+      load(currentPage);
+    }
+  }, [currentPage]);
 
   // Reset subcategory when categories selection changes
   useEffect(() => {
@@ -836,7 +862,7 @@ export default function Materials() {
 
   const fetchAllFilteredForExport = async () => {
     const res = await store.getMaterials({
-      search,
+      search: debouncedSearch,
       category: selectedCats.join(','),
       subCategory: selectedSubCats.join(','),
       status: selectedStatuses.join(','),
@@ -1083,7 +1109,15 @@ export default function Materials() {
     }
   };
 
-  const getSupplierName = (id) => suppliers.find(s => s.id === id)?.name || '—';
+  const getSupplierName = (val) => {
+    if (!val) return '—';
+    const found = suppliers.find(s => String(s.id) === String(val) || s.name === val);
+    if (found && found.name) return found.name;
+    if (typeof val === 'string' && val.trim() && isNaN(val)) {
+      return val.trim();
+    }
+    return val || '—';
+  };
 
   return (
     <div className="materials-page-container" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -1180,15 +1214,15 @@ export default function Materials() {
             <input
               id="material-search"
               placeholder="Search by name, code, lot, location..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
               className="search-field-input"
             />
-            {search && (
+            {searchInput && (
               <button
                 type="button"
                 className="search-clear-btn"
-                onClick={() => setSearch('')}
+                onClick={() => { setSearchInput(''); setDebouncedSearch(''); }}
                 title="Clear Search"
               >
                 ✕
@@ -1287,7 +1321,8 @@ export default function Materials() {
             type="button"
             className="filter-reset-btn"
             onClick={() => {
-              setSearch('');
+              setSearchInput('');
+              setDebouncedSearch('');
               setSelectedCats([]);
               setSelectedSubCats([]);
               setSelectedStatuses([]);

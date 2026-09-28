@@ -62,11 +62,57 @@ const normalizeDateToYMD = (val) => {
 const BUDGET_SHEET_ID = "1Hj3JeJEKB43aYYWv8gk2UhdU6BWuEQfCg5pBlTdBMNA";
 const API_KEY = "AIzaSyAomDFBkOySlIxKWSKGHe6ATv9gvaBr7uk";
 
+const fetchLiveCuttingTablesFromGoogle = async () => {
+  try {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${BUDGET_SHEET_ID}/values/Cutting!A:F?key=${API_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) return {};
+    const json = await res.json();
+    const values = json.values || [];
+
+    const lotTableMap = {};
+    let currentLot = null;
+
+    for (let i = 0; i < values.length; i++) {
+      const row = values[i];
+      if (!row || row.length === 0) continue;
+
+      const colA = String(row[0] || '').trim();
+      const colB = String(row[1] || '').trim();
+
+      const lotMatchA = colA.match(/lot\s*(?:number:?)?\s*(\d+)/i);
+      if (lotMatchA) {
+        currentLot = lotMatchA[1];
+      }
+
+      if (colA.toLowerCase().replace(/[^a-z]/g, '').includes('lotnumber') && colB && !isNaN(Number(colB))) {
+        currentLot = String(colB).trim();
+      }
+
+      if (currentLot && colB && !colB.toLowerCase().includes('table') && !isNaN(Number(colB))) {
+        const tableNum = Number(colB);
+        if (tableNum >= 1 && tableNum <= 50) {
+          lotTableMap[currentLot] = `Table ${tableNum}`;
+        }
+      } else if (currentLot && colB && colB.toLowerCase().startsWith('table')) {
+        lotTableMap[currentLot] = colB;
+      }
+    }
+    return lotTableMap;
+  } catch (err) {
+    console.warn("Could not fetch Cutting sheet table map:", err);
+    return {};
+  }
+};
+
 const fetchLiveIndexSheetFromGoogle = async () => {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${BUDGET_SHEET_ID}/values/Index!A:AZ?key=${API_KEY}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Google Sheets fetch error: ${res.statusText}`);
-  const json = await res.json();
+  const [indexRes, cuttingTableMap] = await Promise.all([
+    fetch(`https://sheets.googleapis.com/v4/spreadsheets/${BUDGET_SHEET_ID}/values/Index!A:AZ?key=${API_KEY}`),
+    fetchLiveCuttingTablesFromGoogle()
+  ]);
+
+  if (!indexRes.ok) throw new Error(`Google Sheets fetch error: ${indexRes.statusText}`);
+  const json = await indexRes.json();
   const values = json.values || [];
   if (values.length === 0) return [];
 
@@ -105,7 +151,9 @@ const fetchLiveIndexSheetFromGoogle = async () => {
     const savedAt = getCol(row, 'saved at', 'savedat', 'saved date', 'cutting date', 'date') || String(row[23] || '').trim();
     const qtyStr = getCol(row, 'cutting qty', 'cuttingqty', 'qty', 'total qty', 'pcs') || String(row[25] || '0').trim();
     const cuttingQty = parseFloat(qtyStr.replace(/,/g, '')) || 0;
-    const cuttingTable = getCol(row, 'cutting table', 'table') || 'Table 1';
+
+    const rawTable = getCol(row, 'cutting table', 'table');
+    const cuttingTable = cuttingTableMap[lot] || (rawTable ? (rawTable.toLowerCase().startsWith('table') ? rawTable : `Table ${rawTable}`) : 'Table 1');
 
     // Only include rows where Saved at is populated (completed cuts)
     if (savedAt) {
@@ -133,6 +181,8 @@ export default function DailyCuttingReport() {
     return new Date().toISOString().slice(0, 10);
   });
   const [loading, setLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [cachedAttendance, setCachedAttendance] = useState(null);
   const [reportData, setReportData] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [tableCutterMap, setTableCutterMap] = useState({});
@@ -154,6 +204,11 @@ export default function DailyCuttingReport() {
   const fetchReport = async (refresh = false) => {
     setLoading(true);
     try {
+      // Pre-fetch attendance in parallel for instant PDF export
+      getTodayAttendanceText().then(att => {
+        if (att) setCachedAttendance(att);
+      }).catch(() => {});
+
       // 1. Fetch live Google Sheets Index tab directly for 100% real-time accuracy
       let rawList = [];
       try {
@@ -310,8 +365,10 @@ export default function DailyCuttingReport() {
     return roundedTotals;
   }, [filteredData, tableCutterMap]);
 
-  // Helper to fetch today's attendance (reused)
+  // Helper to fetch today's attendance (reused with cache)
   const getTodayAttendanceText = async () => {
+    if (cachedAttendance) return cachedAttendance;
+
     const todayStr = new Date().toISOString().slice(0, 10);
     let hodsPresent = 0;
     let supervisorsPresent = 0;
@@ -325,7 +382,11 @@ export default function DailyCuttingReport() {
     };
 
     try {
-      const attRes = await store.getAttendance(todayStr);
+      const attRes = await Promise.race([
+        store.getAttendance(todayStr),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 600))
+      ]).catch(() => null);
+
       if (attRes && attRes.success && attRes.data) {
         attRes.data.forEach(record => {
           const recordHods = safeParseJSON(record.hods);
@@ -363,10 +424,13 @@ export default function DailyCuttingReport() {
 
     const uniqueAbsentees = [...new Set(absentees)];
 
-    return {
+    const resObj = {
       summary: `HODs Present: ${hodsPresent} | Supervisors Present: ${supervisorsPresent} | Helpers Present: ${helpersPresent}`,
       absenteesText: uniqueAbsentees.length > 0 ? `Absentees: ${uniqueAbsentees.join(', ')}` : "Absentees: None"
     };
+
+    setCachedAttendance(resObj);
+    return resObj;
   };
 
   // Export to Excel
@@ -433,13 +497,17 @@ export default function DailyCuttingReport() {
       return;
     }
 
-    const attData = await getTodayAttendanceText();
+    setPdfLoading(true);
 
-    const doc = new jsPDF({
-      orientation: "landscape",
-      unit: "pt",
-      format: "a4"
-    });
+    setTimeout(async () => {
+      try {
+        const attData = await getTodayAttendanceText();
+
+        const doc = new jsPDF({
+          orientation: "landscape",
+          unit: "pt",
+          format: "a4"
+        });
 
     const PAGE_W = doc.internal.pageSize.getWidth();
     const PAGE_H = doc.internal.pageSize.getHeight();
@@ -830,6 +898,13 @@ export default function DailyCuttingReport() {
     doc.text(stats.totalQty.toLocaleString(), rightColumnX + halfWidth - 8, yRight + 12, { align: "right" });
 
     doc.save(`Daily_Cutting_Report_${selectedDate}.pdf`);
+      } catch (pdfErr) {
+        console.error("Failed to generate PDF:", pdfErr);
+        alert("Failed to generate PDF. Please try again.");
+      } finally {
+        setPdfLoading(false);
+      }
+    }, 10);
   };
 
   return (
@@ -1109,7 +1184,7 @@ export default function DailyCuttingReport() {
           <button
             className="btn btn-secondary"
             onClick={exportToPdf}
-            disabled={loading || filteredData.length === 0}
+            disabled={loading || pdfLoading || filteredData.length === 0}
             style={{
               height: 40,
               borderRadius: 10,
@@ -1121,10 +1196,13 @@ export default function DailyCuttingReport() {
               border: '1px solid rgba(255,255,255,0.15)',
               color: '#ffffff',
               fontWeight: 700,
-              fontSize: 13
+              fontSize: 13,
+              opacity: (loading || pdfLoading || filteredData.length === 0) ? 0.6 : 1,
+              cursor: (loading || pdfLoading || filteredData.length === 0) ? 'not-allowed' : 'pointer'
             }}
           >
-            <Download size={14} /> PDF
+            <Download size={14} className={pdfLoading ? "spin-animation" : ""} />
+            {pdfLoading ? "Generating..." : "PDF"}
           </button>
 
           {/* Excel Export */}

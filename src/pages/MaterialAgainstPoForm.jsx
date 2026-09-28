@@ -6,6 +6,7 @@ import {
   Printer, Play, Square, RotateCcw,
   AlertTriangle, AlertCircle, CheckCircle, Box, Hourglass, FileText, ArrowLeft
 } from 'lucide-react';
+import '../Design/FabricStickerForm.css';
 
 const MaterialAgainstPoForm = () => {
   const navigate = useNavigate();
@@ -196,8 +197,16 @@ const MaterialAgainstPoForm = () => {
     setIsCheckingNetwork(true);
     try {
       const ctrl = new AbortController();
-      const timeoutId = setTimeout(() => ctrl.abort(), 4000);
-      const res = await fetch(`${BASE_URL}/health`, { signal: ctrl.signal });
+      let res;
+      try {
+        res = await fetch(`${BASE_URL}/health`, { signal: ctrl.signal });
+      } catch (fetchErr) {
+        if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+          res = await fetch('http://localhost:5001/api/health', { signal: ctrl.signal });
+        } else {
+          throw fetchErr;
+        }
+      }
       clearTimeout(timeoutId);
       if (res.ok) {
         setIsOnline(true);
@@ -218,12 +227,18 @@ const MaterialAgainstPoForm = () => {
   useEffect(() => {
     let wsHost = 'localhost';
     const WS_URL = `ws://${wsHost}:8765`;
+    let isDisposed = false;
     let reconnectTimeout = null;
     let connectionTimeout = null;
 
     const connectWS = () => {
+      if (isDisposed) return;
       if (wsRef.current) {
-        wsRef.current.close();
+        try {
+          wsRef.current.onclose = null;
+          wsRef.current.onerror = null;
+          wsRef.current.close();
+        } catch (e) {}
       }
 
       console.log('🔌 [PO Print] Connecting to print service at:', WS_URL);
@@ -234,7 +249,15 @@ const MaterialAgainstPoForm = () => {
         }
       }, 5000);
 
-      wsRef.current = new WebSocket(WS_URL);
+      try {
+        wsRef.current = new WebSocket(WS_URL);
+      } catch (e) {
+        setPrintServiceStatus('disconnected');
+        if (!isDisposed) {
+          reconnectTimeout = setTimeout(connectWS, 6000);
+        }
+        return;
+      }
 
       wsRef.current.onopen = () => {
         clearTimeout(connectionTimeout);
@@ -280,21 +303,29 @@ const MaterialAgainstPoForm = () => {
         clearTimeout(connectionTimeout);
         setPrintServiceStatus('disconnected');
         setWsReady(false);
-        reconnectTimeout = setTimeout(connectWS, 4000);
+        if (!isDisposed) {
+          reconnectTimeout = setTimeout(connectWS, 6000);
+        }
       };
 
       wsRef.current.onerror = (err) => {
-        console.error('[PO Print] WS Error:', err);
+        // Silently mark disconnected without throwing errors in console
+        setPrintServiceStatus('disconnected');
       };
     };
 
     connectWS();
 
     return () => {
+      isDisposed = true;
       clearTimeout(reconnectTimeout);
       clearTimeout(connectionTimeout);
       if (wsRef.current) {
-        wsRef.current.close();
+        try {
+          wsRef.current.onclose = null;
+          wsRef.current.onerror = null;
+          wsRef.current.close();
+        } catch (e) {}
       }
     };
   }, []);
@@ -678,156 +709,104 @@ const MaterialAgainstPoForm = () => {
   };
 
   return (
-    <div style={{
-      width: '100%',
-      minHeight: '100vh',
-      padding: '4px 0 32px 0',
-      fontFamily: "'Outfit', 'Inter', sans-serif",
-      color: '#1e293b'
-    }}>
+    <div className="fabric-form-container">
       {/* Floating Active Progress Panel */}
       {batchActive && (
-        <div style={{
-          position: 'fixed', right: 32, top: 120, width: 320, zIndex: 100,
-          background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(16px)',
-          border: '1px solid rgba(79, 70, 229, 0.15)', borderRadius: 24,
-          padding: '24px 20px', boxShadow: '0 20px 40px -15px rgba(0,0,0,0.1)',
-          animation: 'slideIn 0.3s ease-out'
-        }}>
+        <div className="batch-progress-floating-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-            <div style={{ background: '#eef2ff', padding: 8, borderRadius: 10, color: '#4f46e5' }}>
+            <div style={{ background: 'var(--primary-light)', padding: 8, borderRadius: 10, color: 'var(--primary)' }}>
               <Box size={20} />
             </div>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: '900', color: '#0f172a' }}>Batch Progress</h3>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: '900', color: 'var(--text-primary)' }}>Batch Progress</h3>
           </div>
           
-          <div style={{ background: '#f8fafc', padding: 12, borderRadius: 12, marginBottom: 16, border: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: 13, fontWeight: '800', color: '#4f46e5' }}>{batchNumber}</div>
-            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Date: {batchDate} · Time: {batchTime}</div>
+          <div style={{ background: 'var(--surface-alt)', padding: 12, borderRadius: 12, marginBottom: 14, border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 13, fontWeight: '800', color: 'var(--primary)' }}>{batchNumber}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Date: {batchDate} · Time: {batchTime}</div>
           </div>
 
-          <div style={{ background: '#eef2ff', border: '1.5px dashed rgba(79, 70, 229, 0.25)', padding: 12, borderRadius: 12, marginBottom: 16, textAlign: 'center' }}>
-            <div style={{ fontSize: 11, fontWeight: '850', color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Next Barcode ID</div>
-            <div style={{ fontSize: 22, fontWeight: '900', color: '#312e81', letterSpacing: '1px', marginTop: 4 }}>{nextBarcodeId || '------'}</div>
+          <div style={{ background: 'var(--primary-light)', border: '1.5px dashed var(--primary)', padding: 12, borderRadius: 12, marginBottom: 14, textAlign: 'center' }}>
+            <div style={{ fontSize: 11, fontWeight: '850', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Next Barcode ID</div>
+            <div style={{ fontSize: 20, fontWeight: '900', color: 'var(--text-primary)', letterSpacing: '1px', marginTop: 4, fontFamily: 'monospace' }}>{nextBarcodeId || '------'}</div>
           </div>
 
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 6 }}>
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: '700', color: 'var(--text-secondary)', marginBottom: 6 }}>
               <span>Progress Tracker</span>
-              <span>{currentRollNumber} / {totalRollsInBatch} rolls</span>
+              <span style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{currentRollNumber} / {totalRollsInBatch} rolls</span>
             </div>
-            <div style={{ height: 8, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
               <div style={{
-                height: '100%', background: 'linear-gradient(90deg, #4f46e5, #7c3aed)',
+                height: '100%', background: 'linear-gradient(90deg, #2563EB, #4F46E5)',
                 width: `${Math.min(100, Math.max(0, (currentRollNumber / totalRollsInBatch) * 100))}%`,
                 transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
               }} />
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-            <div style={{ flex: 1, background: '#f0fdf4', padding: '10px 8px', borderRadius: 10, textAlign: 'center', border: '1px solid #dcfce7', color: '#15803d', fontSize: 11, fontWeight: '700' }}>
-              Completed: {currentRollNumber}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            <div style={{ flex: 1, background: 'var(--success-light)', padding: '9px 8px', borderRadius: 10, textAlign: 'center', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#10B981', fontSize: 11, fontWeight: '800' }}>
+              Done: {currentRollNumber}
             </div>
-            <div style={{ flex: 1, background: '#fffbeb', padding: '10px 8px', borderRadius: 10, textAlign: 'center', border: '1px solid #fef3c7', color: '#b45309', fontSize: 11, fontWeight: '700' }}>
-              Remaining: {Math.max(0, totalRollsInBatch - currentRollNumber)}
+            <div style={{ flex: 1, background: 'var(--warning-light)', padding: '9px 8px', borderRadius: 10, textAlign: 'center', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#F59E0B', fontSize: 11, fontWeight: '800' }}>
+              Left: {Math.max(0, totalRollsInBatch - currentRollNumber)}
             </div>
           </div>
 
-          <button onClick={() => setShowStopConfirm(true)} style={{
-            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            padding: '10px 0', border: 'none', borderRadius: 12, background: '#fee2e2', color: '#dc2626',
-            fontSize: '12px', fontWeight: '800', cursor: 'pointer', transition: 'all 0.15s'
-          }}
-          onMouseEnter={e => e.currentTarget.style.background = '#fca5a5'}
-          onMouseLeave={e => e.currentTarget.style.background = '#fee2e2'}
-          >
+          <button onClick={() => setShowStopConfirm(true)} className="btn-stop-batch-cancel" style={{ width: '100%' }}>
             <Square size={14} /> Stop & Cancel Batch
           </button>
         </div>
       )}
 
       {/* Enhanced Page Header with Back Button */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <div className="page-header">
+        <div className="page-title-block">
           <button
             type="button"
             className="btn-back-nav"
             onClick={() => navigate(-1)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '8px 14px',
-              borderRadius: '10px',
-              border: '1.5px solid #CBD5E1',
-              background: '#FFFFFF',
-              color: '#0F172A',
-              fontWeight: 800,
-              fontSize: '13px',
-              cursor: 'pointer',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
-              transition: 'all 0.2s'
-            }}
           >
             <ArrowLeft size={16} /> Back
           </button>
           <div>
-            <div className="breadcrumb" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 700, color: '#64748B' }}>
-              <span>Home</span><span> / </span><span>Stock Add</span><span> / </span><span style={{ color: '#4F46E5', fontWeight: 800 }}>Material Against PO</span>
+            <div className="breadcrumb">
+              <span>Home</span><span> / </span><span>Stock Add</span><span> / </span><span style={{ color: 'var(--primary)', fontWeight: 800 }}>Material Against PO</span>
             </div>
-            <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#0f172a', margin: '2px 0 0 0', letterSpacing: '-0.75px' }}>
+            <h1 className="gradient-title" style={{ fontSize: '24px', margin: '2px 0 0 0' }}>
               Add Material Against PO (Linear Meters)
             </h1>
           </div>
         </div>
       </div>
 
-      {/* System Status Indicators */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16,
-        background: '#fff', padding: '12px 24px', borderRadius: 16, border: '1px solid #e2e8f0', marginBottom: 24,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-      }}>
-        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '13px', fontWeight: '700', color: '#475569' }}>
+      {/* System Status Indicators / Scale Status Bar */}
+      <div className="scale-status-bar">
+        <div className="status-indicators">
+          <div className="indicator-item">
             <Printer size={16} /> Printer:
-            <span style={{
-              padding: '3px 10px', borderRadius: 12, fontSize: '11px', fontWeight: '800',
-              background: printServiceStatus === 'ready' ? '#f0fdf4' : '#fee2e2',
-              color: printServiceStatus === 'ready' ? '#16a34a' : '#dc2626',
-              border: `1px solid ${printServiceStatus === 'ready' ? '#bbf7d0' : '#fca5a5'}`
-            }}>
+            <span className={`status-badge ${printServiceStatus === 'ready' ? 'connected' : 'error'}`}>
+              <span className="live-dot" style={{ background: printServiceStatus === 'ready' ? '#10B981' : '#EF4444' }} />
               {printServiceStatus === 'ready' ? 'Ready' : 'Not Connected'}
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '13px', fontWeight: '700', color: '#475569' }}>
-            <span style={{
-              width: 8, height: 8, borderRadius: '50%',
-              background: isOnline ? '#10b981' : '#ef4444',
-              boxShadow: `0 0 8px ${isOnline ? '#10b981' : '#ef4444'}`
-            }} />
-            <span style={{ color: '#475569' }}>
+          <div className="indicator-item">
+            <span className={`status-badge ${isOnline ? 'connected' : 'error'}`}>
+              <span className="live-dot" style={{ background: isOnline ? '#10B981' : '#EF4444' }} />
               {isCheckingNetwork ? 'Checking Network...' : isOnline ? 'Network OK' : 'Local Mode Only'}
             </span>
             {offlineQueue.length > 0 && (
-              <span style={{ background: '#fef3c7', color: '#d97706', fontSize: '10px', padding: '1px 6px', borderRadius: 10, fontWeight: '800' }}>
-                {offlineQueue.length} queue
+              <span style={{ background: 'var(--warning-light)', color: '#F59E0B', fontSize: '10px', padding: '2px 8px', borderRadius: 10, fontWeight: '800', border: '1px solid rgba(245,158,11,0.3)' }}>
+                {offlineQueue.length} queued
               </span>
             )}
           </div>
         </div>
 
         {notification && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            background: notification.type === 'success' ? '#f0fdf4' : '#fffbeb',
-            color: notification.type === 'success' ? '#15803d' : '#b45309',
-            padding: '4px 14px', borderRadius: 12, border: `1px solid ${notification.type === 'success' ? '#bbf7d0' : '#fef3c7'}`,
-            fontSize: '12px', fontWeight: '700', animation: 'pulse 1.5s infinite'
-          }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: notification.type === 'success' ? '#10b981' : '#f59e0b' }} />
+          <div className={`status-badge ${notification.type === 'success' ? 'connected' : 'connecting'}`}>
+            <span className="live-dot" style={{ background: notification.type === 'success' ? '#10B981' : '#F59E0B' }} />
             <span>{notification.text}</span>
           </div>
         )}
@@ -835,108 +814,108 @@ const MaterialAgainstPoForm = () => {
 
       {/* Guide Banner */}
       {uiInstruction && (
-        <div style={{
-          background: instructionType === 'success' ? '#f0fdf4' : instructionType === 'warning' ? '#fffbeb' : '#eff6ff',
-          borderLeft: `5px solid ${instructionType === 'success' ? '#10b981' : instructionType === 'warning' ? '#f59e0b' : '#3b82f6'}`,
-          borderRadius: 12, padding: '14px 20px', marginBottom: 28, display: 'flex', gap: 10, alignItems: 'center',
-          boxShadow: '0 4px 10px rgba(0,0,0,0.01)'
-        }}>
+        <div className={`ui-instruction-box ${instructionType || 'info'}`}>
           <span style={{ fontSize: 18 }}>
             {instructionType === 'success' ? '✓' : instructionType === 'warning' ? '⚠' : 'ℹ'}
           </span>
-          <span style={{ fontSize: '13.5px', color: '#1e293b', fontWeight: '700' }}>{uiInstruction}</span>
+          <span>{uiInstruction}</span>
         </div>
       )}
 
       {/* Form Split Layout Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
+      <div className="fabric-layout-grid">
         {/* Left Side Column: Manual Meters entry */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* Manual Meters Entry Card */}
-          <div style={{
-            background: '#fff', border: '1px solid #e2e8f0', borderRadius: 20,
-            padding: 28, boxShadow: '0 10px 25px rgba(0,0,0,0.02)'
-          }}>
-            <h4 style={{ margin: '0 0 20px 0', fontSize: 13, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.5px', fontWeight: '900' }}>Manual Meters Input</h4>
-            
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', marginBottom: 8 }}>
-                Roll Meters Value (Meters)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="Enter meters (e.g. 120.5)"
-                value={manualMeters}
-                onChange={e => setManualMeters(e.target.value)}
-                disabled={!batchActive}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    handleManualSaveAndPrint();
-                  }
-                }}
-                style={{
-                  width: '100%', padding: '14px 16px', border: '2px solid #cbd5e1',
-                  borderRadius: 12, fontSize: '18px', color: '#1e293b', outline: 'none',
-                  fontWeight: '800', boxSizing: 'border-box', background: !batchActive ? '#f1f5f9' : '#fff',
-                  textAlign: 'center', letterSpacing: '0.5px', transition: 'border-color 0.2s'
-                }}
-                onFocus={e => { if(batchActive) e.target.style.borderColor = '#4f46e5'; }}
-                onBlur={e => { e.target.style.borderColor = '#cbd5e1'; }}
-              />
-              <p style={{ margin: '6px 0 0 0', fontSize: '11px', color: '#64748b', fontWeight: '500' }}>
-                {!batchActive ? '⚠️ Start the batch scan below to enable measurements input.' : '💡 Type meters and press ENTER to print sticker & save roll.'}
-              </p>
+          <div className="card premium-card">
+            <div className="card-header-styled">
+              <span className="card-title">Manual Meters Input</span>
+              <span className="status-badge demo">Linear Meters</span>
             </div>
+            <div className="card-body">
+              <div style={{ marginBottom: 18 }}>
+                <label className="form-label">
+                  Roll Meters Value (Mtrs) <span className="required-star">*</span>
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="Enter meters (e.g. 120.5)"
+                    value={manualMeters}
+                    onChange={e => setManualMeters(e.target.value)}
+                    disabled={!batchActive}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        handleManualSaveAndPrint();
+                      }
+                    }}
+                    className="form-control"
+                    style={{
+                      height: '52px',
+                      fontSize: '22px',
+                      fontWeight: '900',
+                      textAlign: 'center',
+                      fontFamily: 'monospace',
+                      letterSpacing: '1px',
+                      borderColor: batchActive ? 'var(--primary)' : undefined,
+                      paddingRight: '60px'
+                    }}
+                  />
+                  <span style={{
+                    position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
+                    fontWeight: 800, fontSize: 13, color: 'var(--text-muted)'
+                  }}>MTR</span>
+                </div>
+                <p style={{ margin: '8px 0 0 0', fontSize: '11.5px', color: 'var(--text-secondary)', fontWeight: '600' }}>
+                  {!batchActive ? '⚠️ Start the batch scan below to enable measurements input.' : '💡 Type meters and press ENTER to print sticker & save roll.'}
+                </p>
+              </div>
 
-            <div style={{ marginTop: 24 }}>
-              <button
-                type="button"
-                onClick={handleManualSaveAndPrint}
-                disabled={isProcessing || !batchActive || !manualMeters || parseFloat(manualMeters) <= 0}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  padding: '14px 0', borderRadius: 12, border: 'none',
-                  background: (!batchActive || !manualMeters || parseFloat(manualMeters) <= 0) ? '#e2e8f0' : 'linear-gradient(135deg, #4f46e5, #7c3aed)',
-                  color: (!batchActive || !manualMeters || parseFloat(manualMeters) <= 0) ? '#94a3b8' : '#fff',
-                  fontWeight: '850', fontSize: '14px', cursor: (!batchActive || !manualMeters || parseFloat(manualMeters) <= 0) ? 'not-allowed' : 'pointer',
-                  boxShadow: (!batchActive || !manualMeters || parseFloat(manualMeters) <= 0) ? 'none' : '0 4px 14px rgba(79, 70, 229, 0.25)',
-                  transition: 'all 0.2s'
-                }}
-              >
-                <Printer size={16} /> Save Roll & Print Sticker (Mtrs)
-              </button>
+              <div>
+                <button
+                  type="button"
+                  onClick={handleManualSaveAndPrint}
+                  disabled={isProcessing || !batchActive || !manualMeters || parseFloat(manualMeters) <= 0}
+                  className="btn-primary"
+                  style={{
+                    width: '100%',
+                    height: '46px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    borderRadius: '10px',
+                    fontWeight: '800',
+                    fontSize: '14px',
+                    cursor: (!batchActive || !manualMeters || parseFloat(manualMeters) <= 0) ? 'not-allowed' : 'pointer',
+                    opacity: (!batchActive || !manualMeters || parseFloat(manualMeters) <= 0) ? 0.5 : 1
+                  }}
+                >
+                  <Printer size={16} /> Save Roll & Print Sticker (Mtrs)
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Workflow progress timeline */}
-          <div style={{
-            background: '#fff', border: '1px solid #e2e8f0', borderRadius: 20,
-            padding: 24, boxShadow: '0 10px 25px rgba(0,0,0,0.02)'
-          }}>
-            <h4 style={{ margin: '0 0 16px 0', fontSize: 13, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.5px', fontWeight: '900' }}>Workflow Steps</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="step-tracker-card">
+            <div className="card-header-styled">
+              <span className="card-title">Workflow Steps</span>
+            </div>
+            <div className="steps-list">
               {[
-                { active: activeSteps.step1, num: '1', label: 'Fill Form Details (All fields are required)' },
+                { active: activeSteps.step1, num: '1', label: 'Fill Form Details (All fields required)' },
                 { active: activeSteps.step2, num: '2', label: 'Set Total Rolls quantity' },
                 { active: activeSteps.step3, num: '3', label: 'Click "Start Batch" to lock details' },
                 { active: activeSteps.step4, num: '4', label: 'Enter roll meters & print sticker' },
                 { active: activeSteps.step5, num: '5', label: 'Complete batch' },
               ].map((step, idx) => (
-                <div key={idx} style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
-                  borderRadius: 12, background: step.active ? '#f0fdf4' : '#f8fafc',
-                  border: `1px solid ${step.active ? '#bbf7d0' : '#e2e8f0'}`,
-                  transition: 'all 0.2s'
-                }}>
-                  <div style={{
-                    width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', background: step.active ? '#10b981' : '#cbd5e1',
-                    color: '#fff', fontSize: '11px', fontWeight: '900'
-                  }}>
+                <div key={idx} className={`step-row ${step.active ? 'active' : ''}`}>
+                  <div className="step-num">
                     {step.active ? '✓' : step.num}
                   </div>
-                  <span style={{ fontSize: '13px', fontWeight: '700', color: step.active ? '#15803d' : '#475569' }}>
+                  <span className="step-label">
                     {step.label}
                   </span>
                 </div>
@@ -946,306 +925,261 @@ const MaterialAgainstPoForm = () => {
         </div>
 
         {/* Right Side Column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* Batch controls */}
-          <div style={{
-            background: '#fff', border: '1px solid #e2e8f0', borderRadius: 20,
-            padding: 24, boxShadow: '0 10px 25px rgba(0,0,0,0.02)'
-          }}>
-            <h4 style={{ margin: '0 0 16px 0', fontSize: 13, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.5px', fontWeight: '900' }}>Batch Control Panel</h4>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', marginBottom: 6 }}>Total Rolls in Batch</label>
-                <input
-                  type="number"
-                  value={totalRollsInBatch === '' ? '' : totalRollsInBatch}
-                  onChange={e => {
-                    const val = e.target.value;
-                    setTotalRollsInBatch(val === '' ? '' : Math.max(1, parseInt(val) || 1));
-                  }}
+          <div className="card premium-card">
+            <div className="card-header-styled">
+              <span className="card-title">Batch Control Panel</span>
+            </div>
+            <div className="card-body">
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 180px' }}>
+                  <label className="form-label">Total Rolls in Batch</label>
+                  <input
+                    type="number"
+                    value={totalRollsInBatch === '' ? '' : totalRollsInBatch}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setTotalRollsInBatch(val === '' ? '' : Math.max(1, parseInt(val) || 1));
+                    }}
+                    disabled={batchActive}
+                    className="form-control"
+                    style={{ fontWeight: 700 }}
+                  />
+                </div>
+
+                {!batchActive ? (
+                  <button
+                    type="button"
+                    onClick={startBatchProcess}
+                    disabled={!isFormValid()}
+                    className="btn-success"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '0 20px', borderRadius: 8, height: '38px',
+                      fontWeight: 800, fontSize: '13px', cursor: isFormValid() ? 'pointer' : 'not-allowed',
+                      opacity: isFormValid() ? 1 : 0.6
+                    }}
+                  >
+                    <Play size={14} /> Start Batch
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowStopConfirm(true)}
+                    className="btn-danger"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '0 20px', borderRadius: 8, height: '38px',
+                      fontWeight: 800, fontSize: '13px', cursor: 'pointer'
+                    }}
+                  >
+                    <Square size={14} /> Stop Batch
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={resetFormFields}
                   disabled={batchActive}
+                  className="btn-secondary"
                   style={{
-                    width: '100%', padding: '10px 14px', border: '1.5px solid #cbd5e1',
-                    borderRadius: 10, fontSize: '13.5px', color: '#1e293b', outline: 'none',
-                    fontWeight: '700', background: batchActive ? '#f1f5f9' : '#fff'
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '0 16px', borderRadius: 8, height: '38px',
+                    fontWeight: 800, fontSize: '13px', cursor: batchActive ? 'not-allowed' : 'pointer',
+                    opacity: batchActive ? 0.6 : 1
                   }}
-                />
+                >
+                  <RotateCcw size={14} /> Reset
+                </button>
               </div>
-
-              {!batchActive ? (
-                <button
-                  type="button"
-                  onClick={startBatchProcess}
-                  disabled={!isFormValid()}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '11px 20px', borderRadius: 12, border: 'none',
-                    background: isFormValid() ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : '#e2e8f0',
-                    color: isFormValid() ? '#fff' : '#94a3b8',
-                    cursor: isFormValid() ? 'pointer' : 'not-allowed',
-                    boxShadow: isFormValid() ? '0 4px 12px rgba(16,185,129,0.25)' : 'none',
-                    fontWeight: '800', fontSize: '13px', height: '40px', boxSizing: 'border-box'
-                  }}
-                >
-                  <Play size={14} /> Start Batch
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowStopConfirm(true)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '11px 20px', borderRadius: 12, border: 'none',
-                    background: '#fee2e2', color: '#dc2626',
-                    cursor: 'pointer', fontWeight: '800', fontSize: '13px',
-                    height: '40px', boxSizing: 'border-box'
-                  }}
-                >
-                  <Square size={14} /> Stop Batch
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={resetFormFields}
-                disabled={batchActive}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '11px 16px', borderRadius: 12, border: '1px solid #cbd5e1',
-                  background: '#fff', color: '#475569',
-                  cursor: batchActive ? 'not-allowed' : 'pointer', fontWeight: '800', fontSize: '13px',
-                  height: '40px', boxSizing: 'border-box'
-                }}
-              >
-                <RotateCcw size={14} /> Reset
-              </button>
             </div>
           </div>
 
           {/* Form details card */}
-          <div style={{
-            background: '#fff', border: '1px solid #e2e8f0', borderRadius: 20,
-            padding: 24, boxShadow: '0 10px 25px rgba(0,0,0,0.02)'
-          }}>
-            <h4 style={{ margin: '0 0 18px 0', fontSize: 13, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.5px', fontWeight: '900' }}>Roll Metadata Details</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'flex-end' }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '800', color: '#475569', marginBottom: 5 }}>PO Number <span style={{ color: '#ef4444' }}>*</span></label>
-                    <input
-                      value={formData.poNumber}
-                      onChange={e => handleInputChange('poNumber', e.target.value)}
-                      disabled={batchActive}
-                      placeholder="e.g. PO-20251028-5328"
+          <div className="card premium-card">
+            <div className="card-header-styled">
+              <span className="card-title">Roll Metadata Details</span>
+            </div>
+            <div className="card-body">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'flex-end' }}>
+                    <div style={{ flex: 1 }}>
+                      <label className="form-label">PO Number <span className="required-star">*</span></label>
+                      <input
+                        value={formData.poNumber}
+                        onChange={e => handleInputChange('poNumber', e.target.value)}
+                        disabled={batchActive}
+                        placeholder="e.g. PO-20251028-5328"
+                        className="form-control"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={fetchPoDetailsFromSheet}
+                      disabled={batchActive || isFetchingPo}
+                      className="btn-primary"
                       style={{
-                        width: '100%', padding: '10px 14px', border: '1.5px solid #cbd5e1',
-                        borderRadius: 10, fontSize: '13.5px', color: '#1e293b', outline: 'none',
-                        fontWeight: '700', boxSizing: 'border-box', background: batchActive ? '#f1f5f9' : '#fff'
+                        padding: '0 18px', borderRadius: 8, height: '38px',
+                        fontWeight: 800, fontSize: '12px', cursor: 'pointer'
                       }}
+                    >
+                      {isFetchingPo ? 'Fetching...' : 'Fetch Details'}
+                    </button>
+                  </div>
+
+                  {poItems.length > 0 && (
+                    <div style={{
+                      background: 'var(--surface-alt)', border: '1px solid var(--border)', borderRadius: 12,
+                      padding: 14, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 10
+                    }}>
+                      <div style={{ fontSize: '11px', fontWeight: '850', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Items Found in PO ({poItems.length})
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 150, overflowY: 'auto' }}>
+                        {poItems.map((item, index) => {
+                          const isSelected = formData.fabricName === item.description;
+                          return (
+                            <div
+                              key={index}
+                              onClick={() => !batchActive && handleSelectPoItem(item)}
+                              style={{
+                                padding: '8px 12px', borderRadius: 8,
+                                border: `1px solid ${isSelected ? 'var(--primary)' : 'var(--border)'}`,
+                                background: isSelected ? 'var(--primary-light)' : 'var(--surface)',
+                                cursor: batchActive ? 'not-allowed' : 'pointer',
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.15s'
+                              }}
+                            >
+                              <div style={{ textAlign: 'left' }}>
+                                <div style={{ fontSize: '12.5px', fontWeight: '800', color: 'var(--text-primary)' }}>{item.description}</div>
+                                <div style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginTop: 2 }}>Line #{item.lineNo} · {item.department}</div>
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '12.5px', fontWeight: '900', color: 'var(--primary)' }}>{item.qty} {item.uom}</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label className="form-label">CMP Name <span className="required-star">*</span></label>
+                    <input
+                      value={formData.cmfName}
+                      onChange={e => handleInputChange('cmfName', e.target.value)}
+                      disabled={batchActive}
+                      placeholder="e.g. CMF-Fabric"
+                      className="form-control"
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={fetchPoDetailsFromSheet}
-                    disabled={batchActive || isFetchingPo}
-                    style={{
-                      padding: '10px 16px', borderRadius: 10, border: 'none',
-                      background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
-                      color: '#fff', fontWeight: '800', fontSize: '12px', cursor: 'pointer',
-                      height: '40px', boxSizing: 'border-box', transition: 'all 0.25s',
-                      boxShadow: '0 2px 6px rgba(79,70,229,0.15)'
-                    }}
-                  >
-                    {isFetchingPo ? 'Fetching...' : 'Fetch Details'}
-                  </button>
-                </div>
-
-                {poItems.length > 0 && (
-                  <div style={{
-                    background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14,
-                    padding: 16, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 10
-                  }}>
-                    <div style={{ fontSize: '11px', fontWeight: '850', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      Items Found in PO ({poItems.length})
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 150, overflowY: 'auto' }}>
-                      {poItems.map((item, index) => {
-                        const isSelected = formData.fabricName === item.description;
-                        return (
-                          <div
-                            key={index}
-                            onClick={() => !batchActive && handleSelectPoItem(item)}
-                            style={{
-                              padding: '8px 12px', borderRadius: 10, border: `1px solid ${isSelected ? '#818cf8' : '#e2e8f0'}`,
-                              background: isSelected ? '#eff6ff' : '#fff', cursor: batchActive ? 'not-allowed' : 'pointer',
-                              display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.15s'
-                            }}
-                          >
-                            <div style={{ textAlign: 'left' }}>
-                              <div style={{ fontSize: '12.5px', fontWeight: '800', color: '#1e293b' }}>{item.description}</div>
-                              <div style={{ fontSize: '10.5px', color: '#64748b', marginTop: 2 }}>Line #{item.lineNo} · {item.department}</div>
-                            </div>
-                            <div style={{ textAlign: 'right' }}>
-                              <div style={{ fontSize: '12.5px', fontWeight: '900', color: '#4f46e5' }}>{item.qty} {item.uom}</div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                  <div>
+                    <label className="form-label">Fabric Name <span className="required-star">*</span></label>
+                    <input
+                      value={formData.fabricName}
+                      onChange={e => handleInputChange('fabricName', e.target.value)}
+                      disabled={batchActive}
+                      placeholder="e.g. Cotton 30s"
+                      className="form-control"
+                    />
                   </div>
-                )}
-              </div>
+                </div>
 
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label className="form-label">Group <span className="required-star">*</span></label>
+                    <input
+                      value={formData.group}
+                      onChange={e => handleInputChange('group', e.target.value)}
+                      disabled={batchActive}
+                      placeholder="e.g. Knitted"
+                      className="form-control"
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label">Shade <span className="required-star">*</span></label>
+                    <input
+                      value={formData.shade}
+                      onChange={e => handleInputChange('shade', e.target.value)}
+                      disabled={batchActive}
+                      placeholder="e.g. Navy Blue"
+                      className="form-control"
+                    />
+                  </div>
+                </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '800', color: '#475569', marginBottom: 5 }}>CMP Name <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input
-                    value={formData.cmfName}
-                    onChange={e => handleInputChange('cmfName', e.target.value)}
-                    disabled={batchActive}
-                    placeholder="e.g. CMF-Fabric"
-                    style={{
-                      width: '100%', padding: '10px 14px', border: '1.5px solid #cbd5e1',
-                      borderRadius: 10, fontSize: '13.5px', color: '#1e293b', outline: 'none',
-                      fontWeight: '700', boxSizing: 'border-box', background: batchActive ? '#f1f5f9' : '#fff'
-                    }}
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label className="form-label">Lot Number <span className="required-star">*</span></label>
+                    <input
+                      value={formData.lotNumber}
+                      onChange={e => handleInputChange('lotNumber', e.target.value)}
+                      disabled={batchActive}
+                      placeholder="e.g. LOT-4509"
+                      className="form-control"
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label">Bill Number <span className="required-star">*</span></label>
+                    <input
+                      value={formData.billNumber}
+                      onChange={e => handleInputChange('billNumber', e.target.value)}
+                      disabled={batchActive}
+                      placeholder="e.g. BILL-9921"
+                      className="form-control"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '800', color: '#475569', marginBottom: 5 }}>Fabric Name <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input
-                    value={formData.fabricName}
-                    onChange={e => handleInputChange('fabricName', e.target.value)}
-                    disabled={batchActive}
-                    placeholder="e.g. Cotton 30s"
-                    style={{
-                      width: '100%', padding: '10px 14px', border: '1.5px solid #cbd5e1',
-                      borderRadius: 10, fontSize: '13.5px', color: '#1e293b', outline: 'none',
-                      fontWeight: '700', boxSizing: 'border-box', background: batchActive ? '#f1f5f9' : '#fff'
-                    }}
-                  />
-                </div>
-              </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '800', color: '#475569', marginBottom: 5 }}>Group <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input
-                    value={formData.group}
-                    onChange={e => handleInputChange('group', e.target.value)}
-                    disabled={batchActive}
-                    placeholder="e.g. Knitted"
-                    style={{
-                      width: '100%', padding: '10px 14px', border: '1.5px solid #cbd5e1',
-                      borderRadius: 10, fontSize: '13.5px', color: '#1e293b', outline: 'none',
-                      fontWeight: '700', boxSizing: 'border-box', background: batchActive ? '#f1f5f9' : '#fff'
-                    }}
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
+                  <div>
+                    <label className="form-label">Date <span className="required-star">*</span></label>
+                    <input
+                      type="date"
+                      value={formData.date}
+                      onChange={e => handleInputChange('date', e.target.value)}
+                      disabled={batchActive}
+                      className="form-control"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '800', color: '#475569', marginBottom: 5 }}>Shade <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input
-                    value={formData.shade}
-                    onChange={e => handleInputChange('shade', e.target.value)}
-                    disabled={batchActive}
-                    placeholder="e.g. Navy Blue"
-                    style={{
-                      width: '100%', padding: '10px 14px', border: '1.5px solid #cbd5e1',
-                      borderRadius: 10, fontSize: '13.5px', color: '#1e293b', outline: 'none',
-                      fontWeight: '700', boxSizing: 'border-box', background: batchActive ? '#f1f5f9' : '#fff'
-                    }}
-                  />
-                </div>
-              </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '800', color: '#475569', marginBottom: 5 }}>Lot Number <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input
-                    value={formData.lotNumber}
-                    onChange={e => handleInputChange('lotNumber', e.target.value)}
+                  <label className="form-label">Location <span className="required-star">*</span></label>
+                  <LocationPicker
+                    value={formData.location}
+                    onChange={val => handleInputChange('location', val)}
                     disabled={batchActive}
-                    placeholder="e.g. LOT-4509"
-                    style={{
-                      width: '100%', padding: '10px 14px', border: '1.5px solid #cbd5e1',
-                      borderRadius: 10, fontSize: '13.5px', color: '#1e293b', outline: 'none',
-                      fontWeight: '700', boxSizing: 'border-box', background: batchActive ? '#f1f5f9' : '#fff'
-                    }}
                   />
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '800', color: '#475569', marginBottom: 5 }}>Bill Number <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input
-                    value={formData.billNumber}
-                    onChange={e => handleInputChange('billNumber', e.target.value)}
-                    disabled={batchActive}
-                    placeholder="e.g. BILL-9921"
-                    style={{
-                      width: '100%', padding: '10px 14px', border: '1.5px solid #cbd5e1',
-                      borderRadius: 10, fontSize: '13.5px', color: '#1e293b', outline: 'none',
-                      fontWeight: '700', boxSizing: 'border-box', background: batchActive ? '#f1f5f9' : '#fff'
-                    }}
-                  />
-                </div>
-              </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '800', color: '#475569', marginBottom: 5 }}>Date <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input
-                    type="date"
-                    value={formData.date}
-                    onChange={e => handleInputChange('date', e.target.value)}
-                    disabled={batchActive}
-                    style={{
-                      width: '100%', padding: '10px 14px', border: '1.5px solid #cbd5e1',
-                      borderRadius: 10, fontSize: '13.5px', color: '#1e293b', outline: 'none',
-                      fontWeight: '700', boxSizing: 'border-box', background: batchActive ? '#f1f5f9' : '#fff'
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '800', color: '#475569', marginBottom: 5 }}>Location <span style={{ color: '#ef4444' }}>*</span></label>
-                <LocationPicker
-                  value={formData.location}
-                  onChange={val => handleInputChange('location', val)}
-                  disabled={batchActive}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '800', color: '#475569', marginBottom: 5 }}>Received Person <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input
-                    value={formData.receivedPerson}
-                    onChange={e => handleInputChange('receivedPerson', e.target.value)}
-                    disabled={batchActive}
-                    placeholder="e.g. John Doe"
-                    style={{
-                      width: '100%', padding: '10px 14px', border: '1.5px solid #cbd5e1',
-                      borderRadius: 10, fontSize: '13.5px', color: '#1e293b', outline: 'none',
-                      fontWeight: '700', boxSizing: 'border-box', background: batchActive ? '#f1f5f9' : '#fff'
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '800', color: '#475569', marginBottom: 5 }}>Authorized Person <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input
-                    value={formData.authorizedPerson}
-                    onChange={e => handleInputChange('authorizedPerson', e.target.value)}
-                    disabled={batchActive}
-                    placeholder="e.g. Sarah Smith"
-                    style={{
-                      width: '100%', padding: '10px 14px', border: '1.5px solid #cbd5e1',
-                      borderRadius: 10, fontSize: '13.5px', color: '#1e293b', outline: 'none',
-                      fontWeight: '700', boxSizing: 'border-box', background: batchActive ? '#f1f5f9' : '#fff'
-                    }}
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label className="form-label">Received Person <span className="required-star">*</span></label>
+                    <input
+                      value={formData.receivedPerson}
+                      onChange={e => handleInputChange('receivedPerson', e.target.value)}
+                      disabled={batchActive}
+                      placeholder="e.g. John Doe"
+                      className="form-control"
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label">Authorized Person <span className="required-star">*</span></label>
+                    <input
+                      value={formData.authorizedPerson}
+                      onChange={e => handleInputChange('authorizedPerson', e.target.value)}
+                      disabled={batchActive}
+                      placeholder="e.g. Sarah Smith"
+                      className="form-control"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -1266,40 +1200,34 @@ const MaterialAgainstPoForm = () => {
 
           {/* Scanned / Printed roll history table inside batch */}
           {completedRolls.length > 0 && (
-            <div style={{
-              background: '#fff', border: '1px solid #e2e8f0', borderRadius: 20,
-              overflow: 'hidden', boxShadow: '0 10px 25px rgba(0,0,0,0.02)'
-            }}>
-              <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                <h4 style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.5px', fontWeight: '900' }}>
+            <div className="card premium-card" style={{ marginTop: 8, overflow: 'hidden' }}>
+              <div className="card-header-styled">
+                <span className="card-title">
                   Sticker Barcodes Printed in this Batch ({completedRolls.length})
-                </h4>
+                </span>
               </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+              <div className="table-responsive" style={{ overflowX: 'auto' }}>
+                <table className="custom-table" style={{ width: '100%' }}>
                   <thead>
-                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                      <th style={{ padding: '12px 20px', fontWeight: '800', color: '#475569' }}>Roll #</th>
-                      <th style={{ padding: '12px 20px', fontWeight: '800', color: '#475569' }}>Barcode ID</th>
-                      <th style={{ padding: '12px 20px', fontWeight: '800', color: '#475569' }}>Fabric Name</th>
-                      <th style={{ padding: '12px 20px', fontWeight: '800', color: '#475569' }}>Length</th>
-                      <th style={{ padding: '12px 20px', fontWeight: '800', color: '#475569' }}>Time</th>
-                      <th style={{ padding: '12px 20px', fontWeight: '800', color: '#475569' }}>Status</th>
+                    <tr>
+                      <th>Roll #</th>
+                      <th>Barcode ID</th>
+                      <th>Fabric Name</th>
+                      <th>Length</th>
+                      <th>Time</th>
+                      <th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {completedRolls.map((r, i) => (
-                      <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '12px 20px', fontWeight: '900' }}>#{r.rollNumber}</td>
-                        <td style={{ padding: '12px 20px', fontFamily: 'monospace', fontSize: 14 }}>{r.uniqueBarcodeId}</td>
-                        <td style={{ padding: '12px 20px', fontWeight: '600' }}>{r.fabricName} ({r.shade})</td>
-                        <td style={{ padding: '12px 20px', fontWeight: '800' }}>{r.weight} MTR</td>
-                        <td style={{ padding: '12px 20px', color: '#64748b' }}>{r.generatedAt}</td>
-                        <td style={{ padding: '12px 20px' }}>
-                          <span style={{
-                            background: '#dcfce7', color: '#15803d', padding: '2px 8px',
-                            borderRadius: 12, fontSize: '10px', fontWeight: '800', border: '1px solid #bbf7d0'
-                          }}>✓ Synced</span>
+                      <tr key={i}>
+                        <td style={{ fontWeight: 800 }}>#{r.rollNumber}</td>
+                        <td style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>{r.uniqueBarcodeId}</td>
+                        <td style={{ fontWeight: 600 }}>{r.fabricName} ({r.shade})</td>
+                        <td style={{ fontWeight: 800, color: 'var(--primary)' }}>{r.weight} MTR</td>
+                        <td style={{ color: 'var(--text-secondary)' }}>{r.generatedAt}</td>
+                        <td>
+                          <span className="lot-pill">✓ Synced</span>
                         </td>
                       </tr>
                     ))}
@@ -1315,39 +1243,34 @@ const MaterialAgainstPoForm = () => {
       {showStopConfirm && (
         <div style={{
           position: 'fixed', left: 0, top: 0, width: '100vw', height: '100vh',
-          background: 'rgba(15,23,42,0.4)', backdropFilter: 'blur(8px)', zIndex: 10000,
-          display: 'flex', alignItems: 'center', justifyContent: 'center'
+          background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(8px)', zIndex: 10000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
         }}>
-          <div style={{
-            background: '#fff', borderRadius: 20, padding: 32, maxWidth: 440, width: '100%',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.15)', border: '1px solid #e2e8f0'
+          <div className="card premium-card" style={{
+            padding: 28, maxWidth: 440, width: '100%',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
           }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ background: '#fef2f2', padding: 8, borderRadius: 10, color: '#ef4444' }}>
+              <div style={{ background: 'var(--danger-light)', padding: 8, borderRadius: 10, color: 'var(--danger)' }}>
                 <AlertTriangle size={24} />
               </div>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: '900', color: '#0f172a' }}>Stop Batch Process?</h3>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: '900', color: 'var(--text-primary)' }}>Stop Batch Process?</h3>
             </div>
-            <p style={{ color: '#475569', fontSize: '13.5px', lineHeight: 1.5, margin: '0 0 24px 0' }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13.5px', lineHeight: 1.5, margin: '0 0 24px 0' }}>
               You have printed <strong>{currentRollNumber}</strong> rolls of <strong>{totalRollsInBatch}</strong> planned. Stop early and cancel remaining?
             </p>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button
                 onClick={() => setShowStopConfirm(false)}
-                style={{
-                  padding: '10px 18px', borderRadius: 12, border: '1px solid #cbd5e1',
-                  background: '#fff', color: '#475569', fontWeight: '800', fontSize: '13px', cursor: 'pointer'
-                }}
+                className="btn-secondary"
+                style={{ padding: '8px 18px', borderRadius: 8, fontWeight: 800, fontSize: '13px', cursor: 'pointer' }}
               >
                 Go Back
               </button>
               <button
                 onClick={stopBatchEarly}
-                style={{
-                  padding: '10px 18px', borderRadius: 12, border: 'none',
-                  background: '#dc2626', color: '#fff', fontWeight: '800', fontSize: '13px', cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(220,38,38,0.2)'
-                }}
+                className="btn-danger"
+                style={{ padding: '8px 18px', borderRadius: 8, fontWeight: 800, fontSize: '13px', cursor: 'pointer' }}
               >
                 Yes, Stop Batch
               </button>

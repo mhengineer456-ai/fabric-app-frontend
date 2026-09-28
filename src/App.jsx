@@ -16,6 +16,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
 import FabricStickerForm from './pages/FabricStickerForm.jsx';
 import Recommandation from './pages/Recommandation.jsx';
 import DyeingMaterialForm from './pages/DyeingMaterialForm.jsx';
+import DyeingMaterialManual from './pages/DyeingMaterialManual.jsx';
 import Parta from './pages/Parta.jsx';
 import FabricReceivingHistoryPage from './pages/FabricReceivingHistoryPage.jsx';
 import PartaPendingPage from './pages/PartaPendingPage.jsx';
@@ -266,6 +267,8 @@ export default function App() {
               <Route path="/materials" element={<Materials />} />
               <Route path="/fabric-sticker" element={<FabricStickerForm />} />
               <Route path="/dyeing-material" element={<DyeingMaterialForm />} />
+              <Route path="/dyeing-material-manual" element={<DyeingMaterialManual />} />
+              <Route path="/dyeing-manual" element={<DyeingMaterialManual />} />
               <Route path="/warehouse" element={<WarehousePage />} />
               <Route path="/grn" element={<GRNPage />} />
               <Route path="/issue" element={<IssuePage />} />

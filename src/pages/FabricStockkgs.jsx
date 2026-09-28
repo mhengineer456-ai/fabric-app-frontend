@@ -111,7 +111,16 @@ const FabricStockkgs = () => {
       try {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), 3000);
-        await fetch(`${BASE_URL}/health`, { signal: ctrl.signal });
+        let res;
+        try {
+          res = await fetch(`${BASE_URL}/health`, { signal: ctrl.signal });
+        } catch (fetchErr) {
+          if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+            res = await fetch('http://localhost:5001/api/health', { signal: ctrl.signal });
+          } else {
+            throw fetchErr;
+          }
+        }
         clearTimeout(tid);
         if (!isMounted.current) return;
 
@@ -1188,7 +1197,7 @@ const FabricStockkgs = () => {
             <div className="breadcrumb" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 700 }}>
               <span>Home</span><span>/</span><span>Stock Add</span><span>/</span><span style={{ color: 'var(--primary, #2563EB)' }}>Fabric Stock (KGs)</span>
             </div>
-            <h1 style={{ margin: '2px 0 0 0', fontSize: '22px', fontWeight: 900, letterSpacing: '-0.5px' }}>
+            <h1 className="gradient-title" style={{ margin: '2px 0 0 0', fontSize: '24px' }}>
               Add Fabric Stock (Kilograms / 4M Series)
             </h1>
             <p style={{ margin: '3px 0 0 0', color: 'var(--text-muted, #64748B)', fontSize: '12.5px' }}>
@@ -1245,29 +1254,20 @@ const FabricStockkgs = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div className="weight-card connected" style={{ display: 'flex', flexDirection: 'column', gap: 10, background: 'linear-gradient(135deg, #059669 0%, #047857 100%)' }}>
             <div className="weight-label" style={{ color: '#e2e8f0' }}>Enter Roll Weight (KGs) manually</div>
-            <div style={{ margin: '10px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '15px 0' }}>
               <input
                 id="manual-kgs-input"
-                className="form-control"
-                style={{
-                  fontSize: 24,
-                  fontWeight: 800,
-                  textAlign: 'center',
-                  height: 54,
-                  color: '#000000',
-                  backgroundColor: '#ffffff',
-                  borderRadius: 'var(--radius-md)',
-                  border: '2px solid rgba(255,255,255,0.2)'
-                }}
+                className="manual-weight-input-field"
                 type="number"
                 step="0.01"
-                placeholder="e.g. 25.50"
+                placeholder="0.00"
                 value={manualKgs}
                 onChange={e => setManualKgs(e.target.value)}
                 onKeyDown={handleKeyDown}
                 disabled={!batchActive || isProcessing}
                 autoFocus={batchActive}
               />
+              <span className="weight-unit" style={{ color: 'white', opacity: 0.9, marginLeft: 10 }}>KG</span>
             </div>
             {batchActive && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
