@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { store } from '../store.js';
-import { Plus, Search, Edit, Trash2, Eye, Package, Filter, Download, QrCode, X, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Eye, Package, Filter, Download, QrCode, X, AlertTriangle, ArrowLeft, FileSpreadsheet, FileText } from 'lucide-react';
 import JsBarcode from 'jsbarcode';
 import LocationPicker from '../components/LocationPicker.jsx';
+import * as XLSX from 'xlsx-js-style';
 
 // Custom Soft & Premium Multi-Select Dropdown Component
 function MultiSelect({ label, options, selectedValues, onChange, placeholder }) {
@@ -875,7 +876,357 @@ export default function Materials() {
       endDate,
       barcodeSeries
     });
-    return res || [];
+    if (res && res.data && Array.isArray(res.data)) {
+      return res.data;
+    }
+    return Array.isArray(res) ? res : [];
+  };
+
+  const getItemWiseDataToExport = async () => {
+    let rawData = await fetchAllFilteredForExport();
+    if (skipReAdd) {
+      rawData = rawData.filter(m => !String(m.code || '').startsWith('9'));
+    }
+
+    if (!rawData || rawData.length === 0) {
+      return { groupedList: [], totalRolls: 0, totalWeight: 0, totalRawRecords: 0 };
+    }
+
+    const groupMap = new Map();
+
+    rawData.forEach(item => {
+      const matName = (item.name || 'Unspecified').trim();
+      const shade = (item.color || item.shade || '—').trim();
+      const category = (item.category || 'General').trim();
+      const unit = (item.inventoryType === 'Dyeing Material' || item.category === 'Dyeing') ? 'KGS' : (item.unit || 'Kg');
+
+      const key = `${matName.toUpperCase()}|||${shade.toUpperCase()}`;
+
+      const rollsCount = parseInt(item.rolls, 10) || 1;
+      const weightVal = parseFloat(item.weight) || 0;
+
+      if (!groupMap.has(key)) {
+        groupMap.set(key, {
+          materialName: matName,
+          shade: shade,
+          category: category,
+          unit: unit,
+          totalRolls: rollsCount,
+          totalWeight: weightVal,
+          recordCount: 1
+        });
+      } else {
+        const existing = groupMap.get(key);
+        existing.totalRolls += rollsCount;
+        existing.totalWeight += weightVal;
+        existing.recordCount += 1;
+      }
+    });
+
+    const groupedList = Array.from(groupMap.values()).sort((a, b) => {
+      const nameComp = a.materialName.localeCompare(b.materialName);
+      if (nameComp !== 0) return nameComp;
+      return a.shade.localeCompare(b.shade);
+    });
+
+    const grandTotalRolls = groupedList.reduce((sum, g) => sum + g.totalRolls, 0);
+    const grandTotalWeight = groupedList.reduce((sum, g) => sum + g.totalWeight, 0);
+
+    return {
+      groupedList,
+      totalRolls: grandTotalRolls,
+      totalWeight: grandTotalWeight,
+      totalRawRecords: rawData.length
+    };
+  };
+
+  const exportItemWiseExcel = async () => {
+    try {
+      const { groupedList, totalRolls, totalWeight } = await getItemWiseDataToExport();
+      if (groupedList.length === 0) {
+        alert('No data to export.');
+        return;
+      }
+
+      const exportRows = groupedList.map((item, index) => ({
+        "S.No": index + 1,
+        "Material Name": item.materialName,
+        "Shade / Color": item.shade,
+        "Category": item.category,
+        "Total Rolls": item.totalRolls,
+        "Total Weight / Qty": Number(item.totalWeight.toFixed(2)),
+        "Unit": item.unit
+      }));
+
+      exportRows.push({
+        "S.No": "TOTAL",
+        "Material Name": `Total Item Shades: ${groupedList.length}`,
+        "Shade / Color": "",
+        "Category": "",
+        "Total Rolls": totalRolls,
+        "Total Weight / Qty": Number(totalWeight.toFixed(2)),
+        "Unit": ""
+      });
+
+      const ws = XLSX.utils.json_to_sheet(exportRows);
+
+      const colWidths = [
+        { wch: 8 },
+        { wch: 35 },
+        { wch: 20 },
+        { wch: 20 },
+        { wch: 14 },
+        { wch: 20 },
+        { wch: 10 }
+      ];
+      ws['!cols'] = colWidths;
+
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      for (let R = range.s.r; R <= range.e.r; ++R) {
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+          if (!ws[cellAddress]) continue;
+
+          if (R === 0) {
+            ws[cellAddress].s = {
+              fill: { fgColor: { rgb: "1A56DB" } },
+              font: { name: "Calibri", sz: 11, bold: true, color: { rgb: "FFFFFF" } },
+              alignment: { horizontal: C >= 4 ? "right" : (C === 0 ? "center" : "left"), vertical: "center" },
+              border: {
+                top: { style: "thin", color: { rgb: "1D4ED8" } },
+                bottom: { style: "medium", color: { rgb: "1E40AF" } }
+              }
+            };
+          } else if (R === range.e.r) {
+            ws[cellAddress].s = {
+              fill: { fgColor: { rgb: "E0F2FE" } },
+              font: { name: "Calibri", sz: 11, bold: true, color: { rgb: "0F172A" } },
+              alignment: { horizontal: C >= 4 ? "right" : (C === 0 ? "center" : "left"), vertical: "center" },
+              border: {
+                top: { style: "thin", color: { rgb: "0284C7" } },
+                bottom: { style: "double", color: { rgb: "0369A1" } }
+              }
+            };
+          } else {
+            const isEven = R % 2 === 0;
+            ws[cellAddress].s = {
+              fill: { fgColor: { rgb: isEven ? "F8FAFC" : "FFFFFF" } },
+              font: { name: "Calibri", sz: 10, color: { rgb: "0F172A" } },
+              alignment: { horizontal: (C === 0 || C >= 4) ? (C === 0 ? "center" : "right") : "left", vertical: "center" },
+              border: {
+                bottom: { style: "thin", color: { rgb: "E2E8F0" } }
+              }
+            };
+          }
+        }
+      }
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Item-Wise Summary");
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `Material_Master_Item_Wise_Summary_${dateStr}.xlsx`);
+    } catch (e) {
+      console.error(e);
+      alert(`Item-Wise Excel Export failed: ${e.message}`);
+    }
+  };
+
+  const exportItemWisePdf = async () => {
+    try {
+      const { groupedList, totalRolls } = await getItemWiseDataToExport();
+      if (groupedList.length === 0) {
+        alert('No data to export.');
+        return;
+      }
+
+      const jsPDF = (await import('jspdf')).jsPDF;
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "pt",
+        format: "a4"
+      });
+
+      const PAGE_W = doc.internal.pageSize.getWidth();
+      const PAGE_H = doc.internal.pageSize.getHeight();
+      const M = 30;
+      let y = 35;
+
+      const setFont = (style, size) => {
+        doc.setFont("helvetica", style);
+        doc.setFontSize(size);
+      };
+
+      const drawPageBorder = () => {
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(1.5);
+        doc.rect(M - 10, 15, PAGE_W - 2 * (M - 10), PAGE_H - 30);
+      };
+
+      drawPageBorder();
+
+      // Header Title & Metadata (Black & White)
+      doc.setTextColor(0, 0, 0);
+      setFont("bold", 16);
+      doc.text("MATERIAL MASTER - ITEM WISE SUMMARY REPORT", M, y + 15);
+
+      setFont("normal", 9);
+      doc.text(`Total Varieties: ${groupedList.length} | Total Rolls: ${totalRolls} | Generated: ${new Date().toLocaleString()}`, M, y + 30);
+
+      // Black Divider Line
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(1.5);
+      doc.line(M, y + 38, PAGE_W - M, y + 38);
+
+      y += 48;
+
+      // Table Columns (Only S.No, Material Name, Shade / Color, Total Rolls)
+      const headers = [
+        { label: "S.No", w: 45, align: "center" },
+        { label: "Material Name", w: 260, align: "left" },
+        { label: "Shade / Color", w: 140, align: "left" },
+        { label: "Total Rolls", w: 90, align: "right" }
+      ];
+
+      const totalTableWidth = headers.reduce((sum, h) => sum + h.w, 0);
+      const scaleFactor = (PAGE_W - 2 * M) / totalTableWidth;
+      headers.forEach(h => { h.w = h.w * scaleFactor; });
+
+      const drawTableHeader = (currentY) => {
+        doc.setFillColor(235, 235, 235);
+        doc.rect(M, currentY, PAGE_W - 2 * M, 24, 'F');
+
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(1.2);
+        doc.rect(M, currentY, PAGE_W - 2 * M, 24);
+
+        let dividerX = M;
+        headers.forEach((h, hIdx) => {
+          if (hIdx > 0) doc.line(dividerX, currentY, dividerX, currentY + 24);
+          dividerX += h.w;
+        });
+
+        doc.setTextColor(0, 0, 0);
+        setFont("bold", 9.5);
+
+        let curX = M;
+        headers.forEach(h => {
+          let xOffset = 6;
+          if (h.align === "right") xOffset = h.w - 6;
+          else if (h.align === "center") xOffset = h.w / 2;
+          doc.text(h.label, curX + xOffset, currentY + 15, { align: h.align });
+          curX += h.w;
+        });
+      };
+
+      drawTableHeader(y);
+      y += 24;
+
+      // Table Data Rows
+      groupedList.forEach((item, idx) => {
+        const rowVals = [
+          String(idx + 1),
+          item.materialName,
+          item.shade,
+          String(item.totalRolls)
+        ];
+
+        const cellLines = rowVals.map((val, colIdx) => {
+          const colWidth = headers[colIdx].w - 12;
+          return doc.splitTextToSize(String(val), colWidth);
+        });
+
+        const maxLines = Math.max(...cellLines.map(lines => lines.length));
+        const rowHeight = 14 + (maxLines * 10);
+
+        if (y + rowHeight > PAGE_H - 55) {
+          doc.addPage();
+          drawPageBorder();
+          y = 35;
+          drawTableHeader(y);
+          y += 24;
+        }
+
+        doc.setFillColor(255, 255, 255);
+        doc.rect(M, y, PAGE_W - 2 * M, rowHeight, 'F');
+
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(0.8);
+        doc.rect(M, y, PAGE_W - 2 * M, rowHeight);
+
+        let dividerX = M;
+        headers.forEach((h, hIdx) => {
+          if (hIdx > 0) doc.line(dividerX, y, dividerX, y + rowHeight);
+          dividerX += h.w;
+        });
+
+        doc.setTextColor(0, 0, 0);
+        setFont("normal", 9);
+
+        let rowX = M;
+        headers.forEach((h, colIdx) => {
+          const lines = cellLines[colIdx];
+          let startX = rowX + 6;
+          if (h.align === "right") startX = rowX + h.w - 6;
+          else if (h.align === "center") startX = rowX + h.w / 2;
+
+          lines.forEach((line, lineIdx) => {
+            const lineY = y + 12 + (lineIdx * 10);
+            doc.text(line, startX, lineY, { align: h.align });
+          });
+          rowX += h.w;
+        });
+
+        y += rowHeight;
+      });
+
+      // Total Summary Row
+      if (y + 26 > PAGE_H - 45) {
+        doc.addPage();
+        drawPageBorder();
+        y = 35;
+      }
+
+      doc.setFillColor(240, 240, 240);
+      doc.rect(M, y, PAGE_W - 2 * M, 24, 'F');
+
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(1.4);
+      doc.rect(M, y, PAGE_W - 2 * M, 24);
+
+      let totalDividerX = M;
+      headers.forEach((h, hIdx) => {
+        if (hIdx > 0) doc.line(totalDividerX, y, totalDividerX, y + 24);
+        totalDividerX += h.w;
+      });
+
+      doc.setTextColor(0, 0, 0);
+      setFont("bold", 9.5);
+
+      let totalX = M;
+      const totalVals = [
+        "TOTAL",
+        `Total Item-Shades: ${groupedList.length}`,
+        "",
+        String(totalRolls)
+      ];
+
+      headers.forEach((h, colIdx) => {
+        const val = totalVals[colIdx];
+        if (val) {
+          let startX = totalX + 6;
+          if (h.align === "right") startX = totalX + h.w - 6;
+          else if (h.align === "center") startX = totalX + h.w / 2;
+          doc.text(val, startX, y + 16, { align: h.align });
+        }
+        totalX += h.w;
+      });
+
+      doc.save(`Material_Master_Item_Wise_Summary_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to generate Item-Wise PDF: ' + e.message);
+    }
   };
 
   const handleDelete = async (id) => {
@@ -1158,6 +1509,7 @@ export default function Materials() {
             className="mat-action-btn emerald"
             id="export-materials-csv-btn"
             onClick={handleExport}
+            title="Export detailed roll-by-roll records to CSV"
           >
             <Download size={14} />
             <span>Export CSV</span>
@@ -1166,9 +1518,28 @@ export default function Materials() {
             className="mat-action-btn blue"
             id="export-materials-pdf-btn"
             onClick={exportToPdf}
+            title="Export detailed roll-by-roll records to PDF"
           >
             <Download size={14} />
             <span>Export PDF</span>
+          </button>
+          <button
+            className="mat-action-btn indigo"
+            id="export-itemwise-excel-btn"
+            onClick={exportItemWiseExcel}
+            title="Export Item-wise summary (Material Name, Shade, Total Rolls) to Excel"
+          >
+            <FileSpreadsheet size={14} />
+            <span>Item-Wise Excel</span>
+          </button>
+          <button
+            className="mat-action-btn purple"
+            id="export-itemwise-pdf-btn"
+            onClick={exportItemWisePdf}
+            title="Export Item-wise summary (Material Name, Shade, Total Rolls) to PDF"
+          >
+            <FileText size={14} />
+            <span>Item-Wise PDF</span>
           </button>
         </div>
       </div>
@@ -1753,6 +2124,26 @@ export default function Materials() {
         .mat-action-btn.blue:hover {
           transform: translateY(-1px);
           box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+        }
+
+        .mat-action-btn.indigo {
+          background: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%);
+          color: #FFFFFF;
+          box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+        }
+        .mat-action-btn.indigo:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+        }
+
+        .mat-action-btn.purple {
+          background: linear-gradient(135deg, #7C3AED 0%, #9333EA 100%);
+          color: #FFFFFF;
+          box-shadow: 0 2px 8px rgba(124, 58, 237, 0.25);
+        }
+        .mat-action-btn.purple:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
         }
 
         /* 2. Filter Command Panel */

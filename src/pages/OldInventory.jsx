@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Package, QrCode, Download, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Search, Package, QrCode, Download, ChevronLeft, ChevronRight, RefreshCw, FileSpreadsheet, FileText } from 'lucide-react';
 import { store } from '../store.js';
 import { BarcodeModal } from './Materials.jsx';
+import * as XLSX from 'xlsx-js-style';
 
 // Custom Soft & Premium Multi-Select Dropdown Component
 function MultiSelect({ label, options, selectedValues, onChange, placeholder }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const containerRef = useRef(null);
-  
+
   // Close dropdown on clicking outside
   useEffect(() => {
     const handleOutsideClick = (e) => {
@@ -21,7 +22,7 @@ function MultiSelect({ label, options, selectedValues, onChange, placeholder }) 
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
-  const filteredOptions = options.filter(opt => 
+  const filteredOptions = options.filter(opt =>
     String(opt).toLowerCase().includes(search.toLowerCase())
   );
 
@@ -63,8 +64,8 @@ function MultiSelect({ label, options, selectedValues, onChange, placeholder }) 
         onClick={() => setIsOpen(!isOpen)}
       >
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {selectedValues.length === 0 
-            ? placeholder 
+          {selectedValues.length === 0
+            ? placeholder
             : `${label} (${selectedValues.length})`}
         </span>
         <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>▼</span>
@@ -424,6 +425,341 @@ export default function OldInventory() {
     }
   };
 
+  const getOldInventoryItemWiseDataToExport = async () => {
+    try {
+      const res = await store.getInventory(
+        1,
+        100000,
+        search,
+        selectedParties.join(','),
+        selectedShades.join(','),
+        selectedStores.join(','),
+        stockStatus,
+        balPkgs,
+        selectedDescriptions.join(',')
+      );
+
+      const rawData = (res && res.success && Array.isArray(res.data)) ? res.data : (Array.isArray(res) ? res : items);
+
+      if (!rawData || rawData.length === 0) {
+        return { groupedList: [], totalBalPkgs: 0 };
+      }
+
+      const groupMap = new Map();
+
+      rawData.forEach(item => {
+        const desc = (item.item_description || 'Unspecified').trim();
+        const shade = (item.shade || '—').trim();
+        const key = `${desc.toUpperCase()}|||${shade.toUpperCase()}`;
+
+        const pkgsCount = parseInt(item.bal_pkgs, 10) || 0;
+
+        if (!groupMap.has(key)) {
+          groupMap.set(key, {
+            itemDescription: desc,
+            shade: shade,
+            totalBalPkgs: pkgsCount,
+            recordCount: 1
+          });
+        } else {
+          const existing = groupMap.get(key);
+          existing.totalBalPkgs += pkgsCount;
+          existing.recordCount += 1;
+        }
+      });
+
+      const groupedList = Array.from(groupMap.values()).sort((a, b) => {
+        const descComp = a.itemDescription.localeCompare(b.itemDescription);
+        if (descComp !== 0) return descComp;
+        return a.shade.localeCompare(b.shade);
+      });
+
+      const grandTotalBalPkgs = groupedList.reduce((sum, g) => sum + g.totalBalPkgs, 0);
+
+      return {
+        groupedList,
+        totalBalPkgs: grandTotalBalPkgs
+      };
+    } catch (e) {
+      console.error('Error calculating item-wise data:', e);
+      return { groupedList: [], totalBalPkgs: 0 };
+    }
+  };
+
+  const exportItemWiseExcel = async () => {
+    try {
+      const { groupedList, totalBalPkgs } = await getOldInventoryItemWiseDataToExport();
+      if (groupedList.length === 0) {
+        alert('No data to export.');
+        return;
+      }
+
+      const exportRows = groupedList.map((item, index) => ({
+        "S.No": index + 1,
+        "Item Description": item.itemDescription,
+        "Shade / Color": item.shade,
+        "Total Bal Pkgs": item.totalBalPkgs
+      }));
+
+      exportRows.push({
+        "S.No": "TOTAL",
+        "Item Description": `Total Item Varieties: ${groupedList.length}`,
+        "Shade / Color": "",
+        "Total Bal Pkgs": totalBalPkgs
+      });
+
+      const ws = XLSX.utils.json_to_sheet(exportRows);
+
+      ws['!cols'] = [
+        { wch: 8 },
+        { wch: 40 },
+        { wch: 24 },
+        { wch: 18 }
+      ];
+
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      for (let R = range.s.r; R <= range.e.r; ++R) {
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+          if (!ws[cellAddress]) continue;
+
+          if (R === 0) {
+            ws[cellAddress].s = {
+              fill: { fgColor: { rgb: "1A56DB" } },
+              font: { name: "Calibri", sz: 11, bold: true, color: { rgb: "FFFFFF" } },
+              alignment: { horizontal: C === 3 ? "right" : (C === 0 ? "center" : "left"), vertical: "center" },
+              border: {
+                top: { style: "thin", color: { rgb: "1D4ED8" } },
+                bottom: { style: "medium", color: { rgb: "1E40AF" } }
+              }
+            };
+          } else if (R === range.e.r) {
+            ws[cellAddress].s = {
+              fill: { fgColor: { rgb: "E0F2FE" } },
+              font: { name: "Calibri", sz: 11, bold: true, color: { rgb: "0F172A" } },
+              alignment: { horizontal: C === 3 ? "right" : (C === 0 ? "center" : "left"), vertical: "center" },
+              border: {
+                top: { style: "thin", color: { rgb: "0284C7" } },
+                bottom: { style: "double", color: { rgb: "0369A1" } }
+              }
+            };
+          } else {
+            const isEven = R % 2 === 0;
+            ws[cellAddress].s = {
+              fill: { fgColor: { rgb: isEven ? "F8FAFC" : "FFFFFF" } },
+              font: { name: "Calibri", sz: 10, color: { rgb: "0F172A" } },
+              alignment: { horizontal: C === 3 ? "right" : (C === 0 ? "center" : "left"), vertical: "center" },
+              border: {
+                bottom: { style: "thin", color: { rgb: "E2E8F0" } }
+              }
+            };
+          }
+        }
+      }
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Item-Wise Summary");
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `Old_Inventory_Item_Wise_Summary_${dateStr}.xlsx`);
+    } catch (e) {
+      console.error(e);
+      alert(`Item-Wise Excel Export failed: ${e.message}`);
+    }
+  };
+
+  const exportItemWisePdf = async () => {
+    try {
+      const { groupedList, totalBalPkgs } = await getOldInventoryItemWiseDataToExport();
+      if (groupedList.length === 0) {
+        alert('No data to export.');
+        return;
+      }
+
+      const jsPDF = (await import('jspdf')).jsPDF;
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "pt",
+        format: "a4"
+      });
+
+      const PAGE_W = doc.internal.pageSize.getWidth();
+      const PAGE_H = doc.internal.pageSize.getHeight();
+      const M = 30;
+      let y = 35;
+
+      const setFont = (style, size) => {
+        doc.setFont("helvetica", style);
+        doc.setFontSize(size);
+      };
+
+      const drawPageBorder = () => {
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(1.5);
+        doc.rect(M - 10, 15, PAGE_W - 2 * (M - 10), PAGE_H - 30);
+      };
+
+      drawPageBorder();
+
+      doc.setTextColor(0, 0, 0);
+      setFont("bold", 16);
+      doc.text("OLD LOT INVENTORY - ITEM WISE SUMMARY REPORT", M, y + 15);
+
+      setFont("normal", 9);
+      doc.text(`Total Item Varieties: ${groupedList.length} | Total Bal Pkgs: ${totalBalPkgs} | Generated: ${new Date().toLocaleString()}`, M, y + 30);
+
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(1.5);
+      doc.line(M, y + 38, PAGE_W - M, y + 38);
+
+      y += 48;
+
+      const headers = [
+        { label: "S.No", w: 45, align: "center" },
+        { label: "Item Description", w: 260, align: "left" },
+        { label: "Shade / Color", w: 140, align: "left" },
+        { label: "Total Bal Pkgs", w: 90, align: "right" }
+      ];
+
+      const totalTableWidth = headers.reduce((sum, h) => sum + h.w, 0);
+      const scaleFactor = (PAGE_W - 2 * M) / totalTableWidth;
+      headers.forEach(h => { h.w = h.w * scaleFactor; });
+
+      const drawTableHeader = (currentY) => {
+        doc.setFillColor(235, 235, 235);
+        doc.rect(M, currentY, PAGE_W - 2 * M, 24, 'F');
+
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(1.2);
+        doc.rect(M, currentY, PAGE_W - 2 * M, 24);
+
+        let dividerX = M;
+        headers.forEach((h, hIdx) => {
+          if (hIdx > 0) doc.line(dividerX, currentY, dividerX, currentY + 24);
+          dividerX += h.w;
+        });
+
+        doc.setTextColor(0, 0, 0);
+        setFont("bold", 9.5);
+
+        let curX = M;
+        headers.forEach(h => {
+          let xOffset = 6;
+          if (h.align === "right") xOffset = h.w - 6;
+          else if (h.align === "center") xOffset = h.w / 2;
+          doc.text(h.label, curX + xOffset, currentY + 15, { align: h.align });
+          curX += h.w;
+        });
+      };
+
+      drawTableHeader(y);
+      y += 24;
+
+      groupedList.forEach((item, idx) => {
+        const rowVals = [
+          String(idx + 1),
+          item.itemDescription,
+          item.shade,
+          String(item.totalBalPkgs)
+        ];
+
+        const cellLines = rowVals.map((val, colIdx) => {
+          const colWidth = headers[colIdx].w - 12;
+          return doc.splitTextToSize(String(val), colWidth);
+        });
+
+        const maxLines = Math.max(...cellLines.map(lines => lines.length));
+        const rowHeight = 14 + (maxLines * 10);
+
+        if (y + rowHeight > PAGE_H - 55) {
+          doc.addPage();
+          drawPageBorder();
+          y = 35;
+          drawTableHeader(y);
+          y += 24;
+        }
+
+        doc.setFillColor(255, 255, 255);
+        doc.rect(M, y, PAGE_W - 2 * M, rowHeight, 'F');
+
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(0.8);
+        doc.rect(M, y, PAGE_W - 2 * M, rowHeight);
+
+        let dividerX = M;
+        headers.forEach((h, hIdx) => {
+          if (hIdx > 0) doc.line(dividerX, y, dividerX, y + rowHeight);
+          dividerX += h.w;
+        });
+
+        doc.setTextColor(0, 0, 0);
+        setFont("normal", 9);
+
+        let rowX = M;
+        headers.forEach((h, colIdx) => {
+          const lines = cellLines[colIdx];
+          let startX = rowX + 6;
+          if (h.align === "right") startX = rowX + h.w - 6;
+          else if (h.align === "center") startX = rowX + h.w / 2;
+
+          lines.forEach((line, lineIdx) => {
+            const lineY = y + 12 + (lineIdx * 10);
+            doc.text(line, startX, lineY, { align: h.align });
+          });
+          rowX += h.w;
+        });
+
+        y += rowHeight;
+      });
+
+      if (y + 26 > PAGE_H - 45) {
+        doc.addPage();
+        drawPageBorder();
+        y = 35;
+      }
+
+      doc.setFillColor(240, 240, 240);
+      doc.rect(M, y, PAGE_W - 2 * M, 24, 'F');
+
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(1.4);
+      doc.rect(M, y, PAGE_W - 2 * M, 24);
+
+      let totalDividerX = M;
+      headers.forEach((h, hIdx) => {
+        if (hIdx > 0) doc.line(totalDividerX, y, totalDividerX, y + 24);
+        totalDividerX += h.w;
+      });
+
+      doc.setTextColor(0, 0, 0);
+      setFont("bold", 9.5);
+
+      let totalX = M;
+      const totalVals = [
+        "TOTAL",
+        `Total Item-Shades: ${groupedList.length}`,
+        "",
+        String(totalBalPkgs)
+      ];
+
+      headers.forEach((h, colIdx) => {
+        const val = totalVals[colIdx];
+        if (val) {
+          let startX = totalX + 6;
+          if (h.align === "right") startX = totalX + h.w - 6;
+          else if (h.align === "center") startX = totalX + h.w / 2;
+          doc.text(val, startX, y + 16, { align: h.align });
+        }
+        totalX += h.w;
+      });
+
+      doc.save(`Old_Inventory_Item_Wise_Summary_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to generate Item-Wise PDF: ' + e.message);
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Header */}
@@ -443,9 +779,11 @@ export default function OldInventory() {
             <p style={{ margin: '4px 0 0 0' }}>Browse and search complete historical fabric rolls dataset with all parameters.</p>
           </div>
         </div>
-        <div className="page-actions" style={{ display: 'flex', gap: 10 }}>
+        <div className="page-actions" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button className="btn btn-secondary btn-sm" onClick={handleExport}><Download size={14} /> Export CSV</button>
           <button className="btn btn-secondary btn-sm" onClick={exportToPdf}><Download size={14} /> Export PDF</button>
+          <button className="btn btn-primary btn-sm" onClick={exportItemWiseExcel} title="Export Item-wise summary (Item Description, Shade, Bal Pkgs) to Excel"><FileSpreadsheet size={14} /> Item-Wise Excel</button>
+          <button className="btn btn-primary btn-sm" onClick={exportItemWisePdf} title="Export Item-wise summary (Item Description, Shade, Bal Pkgs) to PDF"><FileText size={14} /> Item-Wise PDF</button>
           <button className="btn btn-secondary btn-sm" onClick={fetchInventory} disabled={loading}>
             <RefreshCw size={14} className={loading ? 'spin-animation' : ''} /> Refresh
           </button>
