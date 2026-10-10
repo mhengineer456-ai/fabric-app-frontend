@@ -8,7 +8,8 @@ import {
   Printer, Sparkles, Droplets, Grid, History, AlertCircle,
   Layers, Ruler, Scissors, FileText, Database, ClipboardList,
   ShieldCheck, Scale, FileSpreadsheet, Compass, HelpCircle, BookOpen,
-  Activity, CheckCircle2, Award, User, Crown
+  Activity, CheckCircle2, Award, User, Crown,
+  Copy, Cpu, UploadCloud
 } from 'lucide-react';
 
 const NAV_SECTIONS = [
@@ -23,12 +24,15 @@ const NAV_SECTIONS = [
   {
     category: 'Inventory & Storage',
     items: [
+      { path: '/master-report', icon: FileSpreadsheet, label: 'Master Inventory Report', badge: 'Report', badgeClass: 'badge-new' },
+      { path: '/master-registry', icon: Database, label: 'Master Registry (Party, Fabric, Shade)', badge: 'Master', badgeClass: 'badge-new' },
       { path: '/materials', icon: Package, label: 'Material Master' },
       { path: '/old-inventory', icon: History, label: 'Old Inventory' },
       {
         label: 'Stock Add',
         icon: PackagePlus,
         children: [
+          { path: '/master-registry', icon: Database, label: '★ Master Registry (Party, Fabric, Shade)', badge: 'Master', badgeClass: 'badge-new' },
           { path: '/fabric-sticker', icon: Printer, label: 'Material Add (Sticker)' },
           { path: '/dyeing-material-manual', icon: Scale, label: 'Dyeing Inward (Manual Weight)' },
           { path: '/dyeing-material', icon: Droplets, label: 'Dyeing Material (Auto Scale)' },
@@ -57,13 +61,31 @@ const NAV_SECTIONS = [
     ]
   },
   {
+    category: 'Fabric Copy',
+    items: [
+      {
+        label: 'Fabric Copy',
+        icon: Copy,
+        badge: 'New',
+        badgeClass: 'badge-new',
+        children: [
+          { path: '/fabric-copy/cutting-copy', icon: Scissors, label: 'Cutting Copy' },
+          { path: '/fabric-copy/digitalize-gatta', icon: Cpu, label: 'Digitalize Gatta' },
+          { path: '/fabric-copy/upload-copy', icon: UploadCloud, label: 'Upload Copy' }
+        ]
+      }
+    ]
+  },
+  {
     category: 'Audit & Reports (MD Suite)',
     items: [
       { path: '/md-reports', icon: Crown, label: 'MD Daily Reports Hub' },
+      { path: '/master-report', icon: FileSpreadsheet, label: 'Master Report (All Tables)', badge: 'Master', badgeClass: 'badge-new' },
       {
         label: 'MD Sequenced Reports',
         icon: BarChart3,
         children: [
+          { path: '/master-report', icon: FileSpreadsheet, label: '★ Master Item-Wise Report' },
           { path: '/reports/daily-fabric-issue', icon: FileText, label: '1. Daily Fabric Issue' },
           { path: '/reports/daily-cutting-report', icon: Scissors, label: '2. Daily Cutting Report' },
           { path: '/reports/table-wise-classification', icon: Layers, label: '3. Table Classification' },
@@ -91,7 +113,7 @@ export default function Layout({ children, darkMode, toggleDark, currentUser, ha
   const location = useLocation();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
-  const [openMenus, setOpenMenus] = useState({ 'Stock Add': true, 'Reports & Audits': false });
+  const [openMenus, setOpenMenus] = useState({ 'Stock Add': true, 'Reports & Audits': false, 'Fabric Copy': true });
   const [search, setSearch] = useState('');
   const [showNotifs, setShowNotifs] = useState(false);
   const [stats, setStats] = useState({ rooms: 0, racks: 0, capacity: 0 });

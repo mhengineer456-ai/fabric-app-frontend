@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { store } from '../store.js';
 import LocationPicker from '../components/LocationPicker.jsx';
+import MasterDropdown from '../components/MasterDropdown.jsx';
 import JsBarcode from 'jsbarcode';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -717,13 +718,11 @@ export default function DyeingMaterialManual() {
                 <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
                   CMF / Dyeing Mill <span style={{ color: '#EF4444' }}>*</span>
                 </label>
-                <input
-                  type="text"
-                  name="cmfName"
-                  className="modern-input"
-                  placeholder="e.g. Paramount Dyeing"
+                <MasterDropdown
+                  type="party"
                   value={formData.cmfName}
-                  onChange={handleFormChange}
+                  onChange={(val) => setFormData(prev => ({ ...prev, cmfName: val }))}
+                  placeholder="Select or add Party..."
                 />
               </div>
 
@@ -731,13 +730,11 @@ export default function DyeingMaterialManual() {
                 <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
                   Fabric Description <span style={{ color: '#EF4444' }}>*</span>
                 </label>
-                <input
-                  type="text"
-                  name="fabricName"
-                  className="modern-input"
-                  placeholder="e.g. Cotton Fleece"
+                <MasterDropdown
+                  type="fabric"
                   value={formData.fabricName}
-                  onChange={handleFormChange}
+                  onChange={(val) => setFormData(prev => ({ ...prev, fabricName: val }))}
+                  placeholder="Select or add Fabric..."
                 />
               </div>
             </div>
@@ -748,13 +745,11 @@ export default function DyeingMaterialManual() {
                 <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
                   Shade / Color <span style={{ color: '#EF4444' }}>*</span>
                 </label>
-                <input
-                  type="text"
-                  name="shade"
-                  className="modern-input"
-                  placeholder="e.g. Navy Blue / Melange"
+                <MasterDropdown
+                  type="shade"
                   value={formData.shade}
-                  onChange={handleFormChange}
+                  onChange={(val) => setFormData(prev => ({ ...prev, shade: val }))}
+                  placeholder="Select or add Shade..."
                 />
               </div>
 
@@ -762,13 +757,11 @@ export default function DyeingMaterialManual() {
                 <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
                   Group / GSM
                 </label>
-                <input
-                  type="text"
-                  name="group"
-                  className="modern-input"
-                  placeholder="e.g. 280 GSM / Heavy"
+                <MasterDropdown
+                  type="category"
                   value={formData.group}
-                  onChange={handleFormChange}
+                  onChange={(val) => setFormData(prev => ({ ...prev, group: val }))}
+                  placeholder="Select or add Group..."
                 />
               </div>
             </div>
@@ -820,12 +813,11 @@ export default function DyeingMaterialManual() {
                 <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
                   Received By
                 </label>
-                <input
-                  type="text"
-                  name="receivedPerson"
-                  className="modern-input"
+                <MasterDropdown
+                  type="person"
                   value={formData.receivedPerson}
-                  onChange={handleFormChange}
+                  onChange={(val) => setFormData(prev => ({ ...prev, receivedPerson: val }))}
+                  placeholder="Select or add Person..."
                 />
               </div>
 
@@ -833,12 +825,11 @@ export default function DyeingMaterialManual() {
                 <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
                   Authorized By
                 </label>
-                <input
-                  type="text"
-                  name="authorizedPerson"
-                  className="modern-input"
+                <MasterDropdown
+                  type="person"
                   value={formData.authorizedPerson}
-                  onChange={handleFormChange}
+                  onChange={(val) => setFormData(prev => ({ ...prev, authorizedPerson: val }))}
+                  placeholder="Select or add Person..."
                 />
               </div>
             </div>

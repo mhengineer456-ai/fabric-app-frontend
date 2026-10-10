@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { store, BASE_URL } from '../store.js';
 import LocationPicker from '../components/LocationPicker.jsx';
+import MasterDropdown from '../components/MasterDropdown.jsx';
 import {
   Printer, Play, Square, RotateCcw,
   AlertTriangle, AlertCircle, CheckCircle, Box, Hourglass, FileText, ArrowLeft
@@ -1070,46 +1071,46 @@ const MaterialAgainstPoForm = () => {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
-                    <label className="form-label">CMP Name <span className="required-star">*</span></label>
-                    <input
+                    <label className="form-label">CMP / Party Name <span className="required-star">*</span></label>
+                    <MasterDropdown
+                      type="party"
                       value={formData.cmfName}
-                      onChange={e => handleInputChange('cmfName', e.target.value)}
+                      onChange={val => handleInputChange('cmfName', val)}
+                      placeholder="Select or add Party..."
                       disabled={batchActive}
-                      placeholder="e.g. CMF-Fabric"
-                      className="form-control"
                     />
                   </div>
                   <div>
                     <label className="form-label">Fabric Name <span className="required-star">*</span></label>
-                    <input
+                    <MasterDropdown
+                      type="fabric"
                       value={formData.fabricName}
-                      onChange={e => handleInputChange('fabricName', e.target.value)}
+                      onChange={val => handleInputChange('fabricName', val)}
+                      placeholder="Select or add Fabric..."
                       disabled={batchActive}
-                      placeholder="e.g. Cotton 30s"
-                      className="form-control"
                     />
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
-                    <label className="form-label">Group <span className="required-star">*</span></label>
-                    <input
+                    <label className="form-label">Group / Category <span className="required-star">*</span></label>
+                    <MasterDropdown
+                      type="category"
                       value={formData.group}
-                      onChange={e => handleInputChange('group', e.target.value)}
+                      onChange={val => handleInputChange('group', val)}
+                      placeholder="Select or add Group..."
                       disabled={batchActive}
-                      placeholder="e.g. Knitted"
-                      className="form-control"
                     />
                   </div>
                   <div>
-                    <label className="form-label">Shade <span className="required-star">*</span></label>
-                    <input
+                    <label className="form-label">Shade / Color <span className="required-star">*</span></label>
+                    <MasterDropdown
+                      type="shade"
                       value={formData.shade}
-                      onChange={e => handleInputChange('shade', e.target.value)}
+                      onChange={val => handleInputChange('shade', val)}
+                      placeholder="Select or add Shade..."
                       disabled={batchActive}
-                      placeholder="e.g. Navy Blue"
-                      className="form-control"
                     />
                   </div>
                 </div>
@@ -1162,22 +1163,22 @@ const MaterialAgainstPoForm = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
                     <label className="form-label">Received Person <span className="required-star">*</span></label>
-                    <input
+                    <MasterDropdown
+                      type="person"
                       value={formData.receivedPerson}
-                      onChange={e => handleInputChange('receivedPerson', e.target.value)}
+                      onChange={val => handleInputChange('receivedPerson', val)}
+                      placeholder="Select or add Person..."
                       disabled={batchActive}
-                      placeholder="e.g. John Doe"
-                      className="form-control"
                     />
                   </div>
                   <div>
                     <label className="form-label">Authorized Person <span className="required-star">*</span></label>
-                    <input
+                    <MasterDropdown
+                      type="person"
                       value={formData.authorizedPerson}
-                      onChange={e => handleInputChange('authorizedPerson', e.target.value)}
+                      onChange={val => handleInputChange('authorizedPerson', val)}
+                      placeholder="Select or add Person..."
                       disabled={batchActive}
-                      placeholder="e.g. Sarah Smith"
-                      className="form-control"
                     />
                   </div>
                 </div>

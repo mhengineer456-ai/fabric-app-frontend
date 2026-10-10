@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { store, BASE_URL } from '../store.js';
 import LocationPicker from '../components/LocationPicker.jsx';
+import MasterDropdown from '../components/MasterDropdown.jsx';
 import {
   Printer, Play, Square, RotateCcw,
   CheckCircle2, AlertTriangle, AlertCircle,
@@ -924,14 +925,12 @@ const ReAddMaterialForm = () => {
               </div>
 
               <div className="form-group">
-                <label className="form-label">CMP Name <span className="required-star">*</span></label>
-                <input
-                  type="text"
-                  name="cmfName"
+                <label className="form-label">CMP / Party Name <span className="required-star">*</span></label>
+                <MasterDropdown
+                  type="party"
                   value={formData.cmfName}
-                  onChange={handleFormChange}
-                  className="form-control"
-                  placeholder="Supplier/CMP Name"
+                  onChange={(val) => setFormData(prev => ({ ...prev, cmfName: val }))}
+                  placeholder="Select or add Party..."
                   disabled={batchActive}
                 />
               </div>
@@ -940,26 +939,22 @@ const ReAddMaterialForm = () => {
             <div className="compact-form-row">
               <div className="form-group">
                 <label className="form-label">Fabric Name <span className="required-star">*</span></label>
-                <input
-                  type="text"
-                  name="fabricName"
+                <MasterDropdown
+                  type="fabric"
                   value={formData.fabricName}
-                  onChange={handleFormChange}
-                  className="form-control"
-                  placeholder="Fabric Type"
+                  onChange={(val) => setFormData(prev => ({ ...prev, fabricName: val }))}
+                  placeholder="Select or add Fabric..."
                   disabled={batchActive}
                 />
               </div>
 
               <div className="form-group">
-                <label className="form-label">Group Name <span className="required-star">*</span></label>
-                <input
-                  type="text"
-                  name="group"
+                <label className="form-label">Group / Category <span className="required-star">*</span></label>
+                <MasterDropdown
+                  type="category"
                   value={formData.group}
-                  onChange={handleFormChange}
-                  className="form-control"
-                  placeholder="GSM/Group info"
+                  onChange={(val) => setFormData(prev => ({ ...prev, group: val }))}
+                  placeholder="Select or add Group..."
                   disabled={batchActive}
                 />
               </div>
@@ -967,14 +962,12 @@ const ReAddMaterialForm = () => {
 
             <div className="compact-form-row">
               <div className="form-group">
-                <label className="form-label">Shade Code <span className="required-star">*</span></label>
-                <input
-                  type="text"
-                  name="shade"
+                <label className="form-label">Shade Code / Color <span className="required-star">*</span></label>
+                <MasterDropdown
+                  type="shade"
                   value={formData.shade}
-                  onChange={handleFormChange}
-                  className="form-control"
-                  placeholder="e.g. Navy Blue"
+                  onChange={(val) => setFormData(prev => ({ ...prev, shade: val }))}
+                  placeholder="Select or add Shade..."
                   disabled={batchActive}
                 />
               </div>

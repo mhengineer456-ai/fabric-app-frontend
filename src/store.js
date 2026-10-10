@@ -1098,5 +1098,101 @@ export const store = {
       localStorage.setItem('twms_approval_requests', JSON.stringify(updated));
       return { success: true };
     }
+  },
+
+  // --- MASTER REGISTRY (Party, Fabric Name, Shade, Person, Category, Location) ---
+  getMasterItems: async (type = 'all', search = '', status = 'all') => {
+    try {
+      const params = new URLSearchParams();
+      if (type && type !== 'all') params.append('type', type);
+      if (search) params.append('search', search);
+      if (status && status !== 'all') params.append('status', status);
+
+      const res = await fetch(`${BASE_URL}/masters?${params.toString()}`, {
+        method: 'GET',
+        headers: getHeaders()
+      }).then(handleResponse);
+
+      if (res && res.data) {
+        // Cache masters by type in local storage for fast autocomplete/offline
+        if (type && type !== 'all') {
+          localStorage.setItem(`twms_masters_${type}`, JSON.stringify(res.data));
+        }
+        return res.data;
+      }
+    } catch (e) {
+      console.warn('Backend offline or error, falling back to local master cache:', e);
+      if (type && type !== 'all') {
+        const cached = localStorage.getItem(`twms_masters_${type}`);
+        if (cached) return JSON.parse(cached);
+      }
+    }
+    return [];
+  },
+
+  addMasterItem: async (itemData) => {
+    return fetch(`${BASE_URL}/masters`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(itemData)
+    }).then(handleResponse);
+  },
+
+  updateMasterItem: async (id, itemData) => {
+    return fetch(`${BASE_URL}/masters/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(itemData)
+    }).then(handleResponse);
+  },
+
+  deleteMasterItem: async (id) => {
+    return fetch(`${BASE_URL}/masters/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    }).then(handleResponse);
+  },
+
+  syncMastersFromExisting: async () => {
+    return fetch(`${BASE_URL}/masters/sync-existing`, {
+      method: 'POST',
+      headers: getHeaders()
+    }).then(handleResponse);
+  },
+
+  // --- MASTER INVENTORY REPORT (Unified cross-table reporting) ---
+  getMasterInventoryFilterOptions: async () => {
+    return fetch(`${BASE_URL}/reports/master-inventory/filter-options`, {
+      method: 'GET',
+      headers: getHeaders()
+    }).then(handleResponse);
+  },
+
+  getMasterInventoryReport: async (params = {}) => {
+    const qs = new URLSearchParams();
+    if (params.fabrics) {
+      if (Array.isArray(params.fabrics)) qs.append('fabrics', params.fabrics.join(','));
+      else qs.append('fabrics', params.fabrics);
+    }
+    if (params.shades) {
+      if (Array.isArray(params.shades)) qs.append('shades', params.shades.join(','));
+      else qs.append('shades', params.shades);
+    }
+    if (params.parties) {
+      if (Array.isArray(params.parties)) qs.append('parties', params.parties.join(','));
+      else qs.append('parties', params.parties);
+    }
+    if (params.status) qs.append('status', params.status);
+    if (params.sourceTable) qs.append('sourceTable', params.sourceTable);
+    if (params.search) qs.append('search', params.search);
+    if (params.page) qs.append('page', params.page);
+    if (params.limit) qs.append('limit', params.limit);
+    if (params.exportAll) qs.append('exportAll', params.exportAll);
+
+    return fetch(`${BASE_URL}/reports/master-inventory?${qs.toString()}`, {
+      method: 'GET',
+      headers: getHeaders()
+    }).then(handleResponse);
   }
 };
+

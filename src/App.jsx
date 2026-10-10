@@ -44,6 +44,12 @@ import TableWiseClassification from './pages/TableWiseClassification.jsx';
 import ShortageReportForm from './pages/ShortageReportForm.jsx';
 import SoftwareGuidePage from './pages/SoftwareGuidePage.jsx';
 import MDReportsHub from './pages/MDReportsHub.jsx';
+import MasterRegistryPage from './pages/MasterRegistryPage.jsx';
+import MasterReportPage from './pages/MasterReportPage.jsx';
+import FabricCopyPage from './pages/FabricCopyPage.jsx';
+import DigitalizeGatta from './pages/DigitalizeGatta.jsx';
+import CopyCuttingReport from './pages/CopyCuttingReport.jsx';
+import UploadCopy from './pages/UploadCopy.jsx';
 
 
 
@@ -265,6 +271,9 @@ export default function App() {
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/materials" element={<Materials />} />
+              <Route path="/master-registry" element={<MasterRegistryPage />} />
+              <Route path="/master-report" element={<MasterReportPage />} />
+              <Route path="/reports/master-report" element={<MasterReportPage />} />
               <Route path="/fabric-sticker" element={<FabricStickerForm />} />
               <Route path="/dyeing-material" element={<DyeingMaterialForm />} />
               <Route path="/dyeing-material-manual" element={<DyeingMaterialManual />} />
@@ -289,6 +298,15 @@ export default function App() {
               <Route path="/software-guide" element={<SoftwareGuidePage />} />
               <Route path="/md-reports" element={<MDReportsHub />} />
               <Route path="/executive-reports" element={<MDReportsHub />} />
+
+              {/* Fabric Copy Section & Sub Tabs */}
+              <Route path="/fabric-copy" element={<CopyCuttingReport />} />
+              <Route path="/fabric-copy/cutting-copy" element={<CopyCuttingReport />} />
+              <Route path="/copy-cutting-report" element={<CopyCuttingReport />} />
+              <Route path="/fabric-copy/digitalize-gatta" element={<DigitalizeGatta />} />
+              <Route path="/digitalize-gatta" element={<DigitalizeGatta />} />
+              <Route path="/fabric-copy/upload-copy" element={<UploadCopy />} />
+              <Route path="/upload-copy" element={<UploadCopy />} />
 
 
 

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import LocationPicker from '../components/LocationPicker.jsx';
+import MasterDropdown from '../components/MasterDropdown.jsx';
 import { useNavigate } from 'react-router-dom';
 import { store, BASE_URL } from '../store.js';
 import {
@@ -1396,7 +1397,7 @@ const DyeingMaterialForm = () => {
         cmfName: batchInfo.cmfName,
         fabricName: batchInfo.fabricName,
         group: batchInfo.group,
-        shade: `${batchInfo.issuedShade} / ${formData.receivedShade}`,
+        shade: formData.receivedShade || batchInfo.issuedShade,
         issuedShade: batchInfo.issuedShade,
         receivedShade: formData.receivedShade,
         weight: currentWeight,
@@ -1428,7 +1429,7 @@ const DyeingMaterialForm = () => {
           barcodeId: barcodeId,
           timestamp: timeString,
           fabricName: batchInfo.fabricName,
-          shade: `${batchInfo.issuedShade} / ${formData.receivedShade}`,
+          shade: formData.receivedShade || batchInfo.issuedShade,
           queued: true
         }]);
         const newRollNumber = currentRollNumber + 1;
@@ -1467,7 +1468,7 @@ const DyeingMaterialForm = () => {
           barcodeId: barcodeId,
           timestamp: timeString,
           fabricName: batchInfo.fabricName,
-          shade: `${batchInfo.issuedShade} / ${formData.receivedShade}`
+          shade: formData.receivedShade || batchInfo.issuedShade
         }]);
 
         const newRollNumber = currentRollNumber + 1;
@@ -2004,19 +2005,37 @@ const DyeingMaterialForm = () => {
 
               <div className="compact-form-row">
                 <div className="form-group">
-                  <label className="form-label">CMP Name <span className="required">*</span></label>
-                  <input className="form-control" placeholder="e.g. CMF-Fabric" value={formData.cmfName} onChange={e => handleInputChange('cmfName', e.target.value)} disabled={batchActive} />
+                  <label className="form-label">CMP / Party Name <span className="required">*</span></label>
+                  <MasterDropdown
+                    type="party"
+                    value={formData.cmfName}
+                    onChange={val => handleInputChange('cmfName', val)}
+                    placeholder="Select or add Party..."
+                    disabled={batchActive}
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Fabric Name <span className="required">*</span></label>
-                  <input className="form-control" placeholder="e.g. Cotton 30s" value={formData.fabricName} onChange={e => handleInputChange('fabricName', e.target.value)} disabled={batchActive} />
+                  <MasterDropdown
+                    type="fabric"
+                    value={formData.fabricName}
+                    onChange={val => handleInputChange('fabricName', val)}
+                    placeholder="Select or add Fabric..."
+                    disabled={batchActive}
+                  />
                 </div>
               </div>
 
               <div className="compact-form-row">
                 <div className="form-group">
-                  <label className="form-label">Group <span className="required">*</span></label>
-                  <input className="form-control" placeholder="e.g. Knitted" value={formData.group} onChange={e => handleInputChange('group', e.target.value)} disabled={batchActive} />
+                  <label className="form-label">Group / Category <span className="required">*</span></label>
+                  <MasterDropdown
+                    type="category"
+                    value={formData.group}
+                    onChange={val => handleInputChange('group', val)}
+                    placeholder="Select or add Group..."
+                    disabled={batchActive}
+                  />
                 </div>
                 <div className="form-group" style={{ display: 'flex', gap: 10, flex: 1 }}>
                   <div style={{ flex: 1 }}>
@@ -2025,7 +2044,12 @@ const DyeingMaterialForm = () => {
                   </div>
                   <div style={{ flex: 1 }}>
                     <label className="form-label">Received Shade <span className="required">*</span></label>
-                    <input className="form-control" placeholder="e.g. Navy Blue" value={formData.receivedShade} onChange={e => handleInputChange('receivedShade', e.target.value)} />
+                    <MasterDropdown
+                      type="shade"
+                      value={formData.receivedShade}
+                      onChange={val => handleInputChange('receivedShade', val)}
+                      placeholder="Select or add Shade..."
+                    />
                   </div>
                 </div>
               </div>
@@ -2053,11 +2077,23 @@ const DyeingMaterialForm = () => {
               <div className="compact-form-row">
                 <div className="form-group">
                   <label className="form-label">Received Person <span className="required">*</span></label>
-                  <input className="form-control" placeholder="e.g. John Doe" value={formData.receivedPerson} onChange={e => handleInputChange('receivedPerson', e.target.value)} disabled={batchActive} />
+                  <MasterDropdown
+                    type="person"
+                    value={formData.receivedPerson}
+                    onChange={val => handleInputChange('receivedPerson', val)}
+                    placeholder="Select or add Person..."
+                    disabled={batchActive}
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Authorized Person <span className="required">*</span></label>
-                  <input className="form-control" placeholder="e.g. Sarah Smith" value={formData.authorizedPerson} onChange={e => handleInputChange('authorizedPerson', e.target.value)} disabled={batchActive} />
+                  <MasterDropdown
+                    type="person"
+                    value={formData.authorizedPerson}
+                    onChange={val => handleInputChange('authorizedPerson', val)}
+                    placeholder="Select or add Person..."
+                    disabled={batchActive}
+                  />
                 </div>
               </div>
             </div>
